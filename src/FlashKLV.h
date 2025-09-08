@@ -35,9 +35,8 @@ public:
     enum : uint8_t { KEY8_MIN = 0x01, KEY8_MAX = 0x3F };
     enum : uint16_t { KEY16_MIN = 0x0100, KEY16_MAX = 0x3FFF };
 protected:
-    enum { FLASH_NOT_SET = 0xFF, FLASH_SET = 0x00 }; // unwritten flash is 0xFF
     enum : uint8_t { DELETED_MASK = 0x7F, UNDELETED_BIT = 0x80, KL16_BIT = 0x40 };
-    enum { NO_DELETE = 0xFFFF };
+    enum { NO_DELETE = SIZE_MAX };
 public:
     struct klv_t {
         uint16_t key;

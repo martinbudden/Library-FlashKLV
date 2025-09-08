@@ -387,36 +387,34 @@ void FlashKLV::flashDeleteAndWrite(size_t deletePos, size_t pos, uint16_t key, u
     const auto* keyLengthPtr = ((key&KL16_BIT) == 0) ? reinterpret_cast<const uint8_t*>(&keyLength8) : reinterpret_cast<const uint8_t*>(&keyLength16); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
     const size_t sizeofKeyLength = ((key&KL16_BIT) == 0) ? sizeof(kl8_t) : sizeof(kl16_t);
 
-    // update the pageCache with key and value, dealing with the case where key and value span two pages
-    if (sizeofKeyLength > bytesToEndOfPage) {
-        // key and value span two pages
-        // copy the first part onto the first page
+    // update the pageCache with key and value, dealing with the case where key and value can span two pages
+    if (sizeofKeyLength >= bytesToEndOfPage) {
+        // key and value fill this page
+        // so copy up to the end of this page
         memcpy(&_pageCache[pageOffset], keyLengthPtr, bytesToEndOfPage);
         flashWritePage(pageIndex++);
         flashReadPage(pageIndex);
-        // copy the rest onto the next page
-        memcpy(&_pageCache[0], keyLengthPtr + bytesToEndOfPage, sizeofKeyLength - bytesToEndOfPage);
-    } else {
-        // key and value are on the same page
-        memcpy(&_pageCache[pageOffset], keyLengthPtr, sizeofKeyLength);
-        if (sizeofKeyLength == bytesToEndOfPage) {
-            // we've exactly filled the page, so start a new one
-            flashWritePage(pageIndex++);
-            flashReadPage(pageIndex);
+        if (sizeofKeyLength > bytesToEndOfPage) {
+            // key and value spill onto next page
+            // so copy the rest onto the next page
+            memcpy(&_pageCache[0], keyLengthPtr + bytesToEndOfPage, sizeofKeyLength - bytesToEndOfPage);
         }
+    } else {
+        // key and value are contained within this page
+        memcpy(&_pageCache[pageOffset], keyLengthPtr, sizeofKeyLength);
     }
 
     pos += sizeofKeyLength;
     pageOffset = pos - pageIndex*PAGE_SIZE;
     bytesToEndOfPage = PAGE_SIZE - pageOffset;
     if (length <= bytesToEndOfPage) {
-        // the whole of the rest of the record fits in the page
+        // the whole of the rest of the record fits in this page
         memcpy(&_pageCache[pageOffset], valuePtr, length);
         flashWritePage(pageIndex);
         return;
     }
 
-    // copy the part of the record that fits on the page and write it
+    // copy the part of the record that fits on this page and write it
     memcpy(&_pageCache[pageOffset], valuePtr, bytesToEndOfPage);
     flashWritePage(pageIndex);
 
