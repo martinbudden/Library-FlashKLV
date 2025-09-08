@@ -132,9 +132,25 @@ bool FlashKLV::isEmpty(uint16_t flashRecordKey)
     return flashRecordKey == RECORD_KEY_EMPTY;
 }
 
+size_t FlashKLV::bytesFree() const
+{
+    size_t pos = 0;
+    uint16_t flashRecordKey = getRecordKey(pos);
+    while (!isEmpty(flashRecordKey)) {
+        pos += getRecordPositionIncrement(pos);
+        if (pos >= _flashMemorySize) {
+            return 0;
+        }
+        flashRecordKey = getRecordKey(pos);
+    }
+    return _flashMemorySize - pos;
+}
+
 int32_t FlashKLV::remove(uint16_t key)
 {
-    assert(keyOK(key) && "invalid key value"); // NOLINT(readability-implicit-bool-conversion)
+    if (!keyOK(key)) {
+        return ERROR_INVALID_KEY;
+    }
 
     size_t pos = 0;
     uint16_t flashRecordKey = getRecordKey(pos);
@@ -150,20 +166,6 @@ int32_t FlashKLV::remove(uint16_t key)
         flashRecordKey = getRecordKey(pos);
     }
     return ERROR_NOT_FOUND;
-}
-
-size_t FlashKLV::bytesFree() const
-{
-    size_t pos = 0;
-    uint16_t flashRecordKey = getRecordKey(pos);
-    while (!isEmpty(flashRecordKey)) {
-        pos += getRecordPositionIncrement(pos);
-        if (pos >= _flashMemorySize) {
-            return 0;
-        }
-        flashRecordKey = getRecordKey(pos);
-    }
-    return _flashMemorySize - pos;
 }
 
 FlashKLV::klv_t FlashKLV::find(uint16_t key) const
