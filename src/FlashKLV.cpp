@@ -226,7 +226,6 @@ int32_t FlashKLV::write(uint16_t key, uint16_t length, const uint8_t* valuePtr)
                 // record has changed, so check if it can the be overwritten, that is bits are only flipped from 1 to 0, never from 0 to 1
                 if (overwriteable(getRecordValuePtr(pos), valuePtr, length)) {
                     // just overwrite the value: key and length are unchanged
-                    //flashWrite(pos + sizeof(kl16_t), length, valuePtr);
                     flashWrite(pos + ((_flashMemory[pos] & KL16_BIT) ? sizeof(kl16_t) : sizeof(kl8_t)), length, valuePtr); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic,readability-implicit-bool-conversion)
                     return OK_OVERWRITTEN;
                 }
@@ -304,10 +303,8 @@ void FlashKLV::flashWritePage(size_t pageIndex) // NOLINT(readability-convert-me
     const int err = flash_safe_execute(call_flash_range_program, &params, UINT32_MAX);
 #if defined(FRAMEWORK_RPI_PICO)
     hard_assert(err == PICO_OK);
-#elif defined(FRAMEWORK_TEST)
-    (void)err;
 #else
-    (void)params;
+    (void)err;
 #endif
 }
 
