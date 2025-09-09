@@ -20,18 +20,19 @@ public:
 #if defined(FRAMEWORK_TEST)
     enum : size_t { SECTOR_SIZE = 512 };  //! Minimum erasable amount, bytes.
     enum { PAGE_SIZE = 8 }; //! Minimum writable amount, bytes.
-    FlashKLV(uint8_t* flashMemory, size_t flashMemorySize);
+    FlashKLV(uint8_t* flashMemoryPtr, size_t flashMemorySize);
 #else
     enum : size_t { SECTOR_SIZE = 4096 };  //! Minimum erasable amount, bytes.
     enum { PAGE_SIZE = 256 }; //! Minimum writable amount, bytes.
 #endif
 public:
+    enum bank_index_e { BANK0 = 0, BANK1 = 1 };
     enum {
         OK = 0, OK_NO_NEED_TO_WRITE = 1, OK_OVERWRITTEN = 2,
         ERROR_FLASH_FULL = -1, ERROR_NOT_FOUND = -2, ERROR_INVALID_KEY = -3, ERROR_RECORD_TOO_LARGE = -4, ERROR_RECORD_TOO_SMALL = -5
     };
     enum { NOT_FOUND = 0 };
-    enum { RECORD_KEY_EMPTY = 0xFFFF, RECORD_EMPTY = 0xFF };
+    enum { RECORD_KEY_EMPTY = 0xFFFF, RECORD_KEY_DELETED = 0, RECORD_EMPTY = 0xFF };
     enum : uint8_t { KEY8_MIN = 0x01, KEY8_MAX = 0x3F };
     enum : uint16_t { KEY16_MIN = 0x0100, KEY16_MAX = 0x3FFF };
 protected:
@@ -41,7 +42,7 @@ public:
     struct klv_t {
         uint16_t key;
         uint16_t length;
-        uint8_t* valuePtr;
+        const uint8_t* valuePtr;
     };
     struct kl8_t { // key and length for 8-bit KLV record
         uint8_t key;
@@ -69,23 +70,33 @@ public:
     size_t bytesFree() const;
     size_t memorySize() const { return _flashMemorySize; }
 
-    int32_t remove(uint16_t key);
     klv_t find(uint16_t key) const;
+    klv_t findNext(size_t pos) const;
     int32_t read(void* value, size_t size,  uint16_t key) const;
 
-    int32_t write(uint16_t key, uint16_t length, const uint8_t* valuePtr);
+    int32_t remove(uint16_t key) { return remove(key, _flashMemoryPtr); }
+    int32_t write(uint16_t key, uint16_t length, const uint8_t* valuePtr) { return write(key, length, valuePtr, _flashMemoryPtr); }
     int32_t write(uint16_t key, uint16_t length, const void* valuePtr) { return write(key, length, static_cast<const uint8_t*>(valuePtr)); }
     int32_t write(const klv_t& klv) { return write(klv.key, klv.length, klv.valuePtr); }
 
+    void eraseBank(bank_index_e bankIndex);
     void eraseSector(uint32_t sector);
     void eraseAllSectors();
     uint32_t getSectorCount() const { return _sectorCount; }
 protected:
-    void flashMarkRecordAsDeleted(size_t pos);
-    void flashWrite(size_t pos, uint16_t length, const uint8_t* valuePtr);
-    void flashDeleteAndWrite(size_t deletePos, size_t pos, uint16_t key, uint16_t length, const uint8_t* valuePtr);
-    void flashReadPage(size_t pageIndex);
-    void flashWritePage(size_t pageIndex);
+    int32_t remove(uint16_t key, uint8_t* flashMemoryPtr);
+    int32_t write(uint16_t key, uint16_t length, const uint8_t* valuePtr, uint8_t* flashMemoryPtr);
+    void flashMarkRecordAsDeleted(size_t pos, uint8_t* flashMemoryPtr);
+    void flashWrite(size_t pos, uint16_t length, const uint8_t* valuePtr, uint8_t* flashMemoryPtr);
+    void flashDeleteAndWrite(size_t deletePos, size_t pos, uint16_t key, uint16_t length, const uint8_t* valuePtr, uint8_t* flashMemoryPtr);
+    void flashReadPage(size_t pageIndex, const uint8_t* flashMemoryPtr);
+    void flashWritePage(size_t pageIndex, uint8_t* flashMemoryPtr);
+
+    static bool isRecordEmpty(size_t pos, const uint8_t* flashMemoryPtr);
+    static uint16_t getRecordKey(size_t pos, const uint8_t* flashMemoryPtr);
+    static uint16_t getRecordLength(size_t pos, const uint8_t* flashMemoryPtr);
+    static uint16_t getRecordPositionIncrement(size_t pos, const uint8_t* flashMemoryPtr);
+    static const uint8_t* getRecordValuePtr(size_t pos, const uint8_t* flashMemoryPtr);
 
     static void call_flash_range_erase(void* param);
     static void call_flash_range_program(void* param);
@@ -93,17 +104,17 @@ public:
 // internal, exposed for testing
     static bool overwriteable(uint8_t flash, uint8_t value);
     static bool overwriteable(const uint8_t* flashPtr, const uint8_t* valuePtr, uint16_t length);
-    bool isRecordEmpty(size_t pos) const;
+    bool isRecordEmpty(size_t pos) const { return isRecordEmpty(pos, _flashMemoryPtr); }
     static bool isEmpty(uint16_t flashRecordKey);
-    uint16_t getRecordKey(size_t pos) const;
-    uint16_t getRecordLength(size_t pos) const;
-    uint16_t getRecordPositionIncrement(size_t pos) const;
-    uint8_t* getRecordValuePtr(size_t pos) const;
+    uint16_t getRecordKey(size_t pos) const { return getRecordKey(pos, _flashMemoryPtr); }
+    uint16_t getRecordLength(size_t pos) const { return getRecordLength(pos, _flashMemoryPtr); }
+    uint16_t getRecordPositionIncrement(size_t pos) const { return getRecordPositionIncrement(pos, _flashMemoryPtr); }
+    const uint8_t* getRecordValuePtr(size_t pos) const { return getRecordValuePtr(pos, _flashMemoryPtr); }
 // for testing
-    const uint8_t* flashPos(size_t pos) { return _flashMemory + pos; } //!< for testing
-    uint8_t flashPeek(size_t pos) { return _flashMemory[pos]; } //!< for testing
+    const uint8_t* flashPos(size_t pos) { return _flashMemoryPtr + pos; } //!< for testing
+    uint8_t flashPeek(size_t pos) { return _flashMemoryPtr[pos]; } //!< for testing
 protected:
-    uint8_t* _flashMemory {};
+    uint8_t* _flashMemoryPtr {};
     size_t _flashMemorySize;
     uint32_t _sectorCount;
     std::array<uint8_t, PAGE_SIZE> _pageCache {};

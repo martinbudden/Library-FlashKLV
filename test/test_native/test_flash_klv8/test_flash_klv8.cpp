@@ -172,7 +172,7 @@ void test_klv8()
     TEST_ASSERT_EQUAL(record4A.key, klv.key);
     TEST_ASSERT_EQUAL(record4A.length, klv.length);
     TEST_ASSERT_EQUAL(flashKLV.flashPos(2), klv.valuePtr);
-    value = *reinterpret_cast<uint32_t*>(klv.valuePtr);
+    value = *reinterpret_cast<const uint32_t*>(klv.valuePtr);
     TEST_ASSERT_EQUAL(record4A.value, value);
 
     // write the same value again, so should not be written and be in same position
@@ -200,7 +200,7 @@ void test_klv8()
     TEST_ASSERT_EQUAL(record4A.key, klv.key);
     TEST_ASSERT_EQUAL(record4A.length, klv.length);
     TEST_ASSERT_EQUAL(flashKLV.flashPos(2), klv.valuePtr);
-    value = *reinterpret_cast<uint32_t*>(klv.valuePtr);
+    value = *reinterpret_cast<const uint32_t*>(klv.valuePtr);
     TEST_ASSERT_EQUAL(record4A.value, value);
 
     // a value of 0x7B536A00 will allow the record to be overwritten
@@ -230,7 +230,7 @@ void test_klv8()
     TEST_ASSERT_EQUAL(record4A.key, klv.key);
     TEST_ASSERT_EQUAL(record4A.length, klv.length);
     TEST_ASSERT_EQUAL(flashKLV.flashPos(2), klv.valuePtr);
-    value = *reinterpret_cast<uint32_t*>(klv.valuePtr);
+    value = *reinterpret_cast<const uint32_t*>(klv.valuePtr);
     TEST_ASSERT_EQUAL(record4A.value, value);
 
     // a value of 0x0C0B0AFE will will require the record to be marked as deleted and a new record written
@@ -260,7 +260,7 @@ void test_klv8()
     TEST_ASSERT_EQUAL(record4A.key, klv.key);
     TEST_ASSERT_EQUAL(record4A.length, klv.length);
     TEST_ASSERT_EQUAL(flashKLV.flashPos(8), klv.valuePtr);
-    value = *reinterpret_cast<uint32_t*>(klv.valuePtr);
+    value = *reinterpret_cast<const uint32_t*>(klv.valuePtr);
     TEST_ASSERT_EQUAL(record4A.value, value);
 }
 
