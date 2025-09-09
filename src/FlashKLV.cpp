@@ -174,12 +174,16 @@ int32_t FlashKLV::remove(uint16_t key)
     return ERROR_NOT_FOUND;
 }
 
+/*!
+Find the record with the specified key.
+*/
 FlashKLV::klv_t FlashKLV::find(uint16_t key) const
 {
     if (!keyOK(key)) {
         return klv_t {.key = NOT_FOUND, .length = 0, .valuePtr = nullptr};
     }
 
+    // Walk the flash until skipping over deleted records and records with a different key.
     size_t pos = 0;
     uint16_t flashRecordKey = getRecordKey(pos);
     while (!isEmpty(flashRecordKey)) {
@@ -197,17 +201,22 @@ FlashKLV::klv_t FlashKLV::find(uint16_t key) const
 
 int32_t FlashKLV::read(void* value, size_t size, uint16_t key) const
 {
+    if (!keyOK(key)) {
+        return ERROR_INVALID_KEY;
+    }
+
     const FlashKLV::klv_t klv = find(key);
     if (klv.key == NOT_FOUND) {
         return ERROR_NOT_FOUND;
     }
     if (klv.length > size) {
+        memcpy(value, klv.valuePtr, size);
         return ERROR_RECORD_TOO_LARGE;
     }
+    memcpy(value, klv.valuePtr, klv.length);
     if (klv.length < size) {
         return ERROR_RECORD_TOO_SMALL;
     }
-    memcpy(value, klv.valuePtr, klv.length);
     return OK;
 }
 
@@ -356,14 +365,12 @@ void FlashKLV::flashWrite(size_t pos, uint16_t length, const uint8_t* valuePtr)
 
 void FlashKLV::flashDeleteAndWrite(size_t deletePos, size_t pos, uint16_t key, uint16_t length, const uint8_t* valuePtr)
 {
-    const size_t deletePageIndex = (deletePos == NO_DELETE) ? UINT32_MAX : deletePos / PAGE_SIZE;
     size_t pageIndex = pos / PAGE_SIZE;
+
+    const size_t deletePageIndex = (deletePos == NO_DELETE) ? NO_DELETE : deletePos / PAGE_SIZE;
     if (deletePos != NO_DELETE && deletePageIndex != pageIndex) {
         // there is a record to mark as deleted, and it is in a different page than the record being written
-        flashReadPage(deletePageIndex);
-        const size_t deletePageOffset = deletePos - deletePageIndex*PAGE_SIZE;
-        _pageCache[deletePageOffset] &= DELETED_MASK;
-        flashWritePage(deletePageIndex);
+        flashMarkRecordAsDeleted(deletePos);
     }
 
     flashReadPage(pageIndex);

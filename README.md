@@ -24,32 +24,32 @@ For keys 256 to 16363, the key and the length are stored as 16-bit values and so
 ## Example
 
 ```cpp
-    // create a FlashKLV object
-    enum { SECTOR_COUNT = 2 };
-    FlashKLV flashKLV(FlashKLV::SECTOR_SIZE*SECTOR_COUNT);
+// create a FlashKLV object
+enum { SECTOR_COUNT = 2 };
+FlashKLV flashKLV(FlashKLV::SECTOR_SIZE*SECTOR_COUNT);
 
-    // declare a key and structure
-    enum { CONFIG_KEY = 0x01 };
-    struct config_t {
-        uint16_t a;
-        uint8_t b;
-        uint8_t c;
-    };
+// declare a key and structure
+enum { CONFIG_KEY = 0x01 };
+struct config_t {
+    uint16_t a;
+    uint8_t b;
+    uint8_t c;
+};
 
-    // write the config structure to flash
-    const config_t configW = { .a= 713, .b =27, .c = 12 };
-    int32_t err = flashKLV.write(CONFIG_KEY, sizeof(configW), &configW);
-    TEST_ASSERT_EQUAL(FlashKLV::OK, err);
+// write the config structure to flash
+const config_t configW = { .a= 713, .b =27, .c = 12 };
+int32_t err = flashKLV.write(CONFIG_KEY, sizeof(configW), &configW);
+TEST_ASSERT_EQUAL(FlashKLV::OK, err);
 
-    // read a config structure
-    config_t configR {};
-    err = flashKLV.read(&configR, sizeof(configR), CONFIG_KEY);
-    TEST_ASSERT_EQUAL(FlashKLV::OK, err);
+// read a config structure
+config_t configR {};
+err = flashKLV.read(&configR, sizeof(configR), CONFIG_KEY);
+TEST_ASSERT_EQUAL(FlashKLV::OK, err);
 
-    // test the values are as expected
-    TEST_ASSERT_EQUAL(713, configR.a);
-    TEST_ASSERT_EQUAL(27, configR.b);
-    TEST_ASSERT_EQUAL(12, configR.c);
+// test the values are as expected
+TEST_ASSERT_EQUAL(713, configR.a);
+TEST_ASSERT_EQUAL(27, configR.b);
+TEST_ASSERT_EQUAL(12, configR.c);
 ```
 
 ## What happens when the flash memory fills up
@@ -57,7 +57,7 @@ For keys 256 to 16363, the key and the length are stored as 16-bit values and so
 When the flash memory fills up it must be erased before new data can be written.
 
 The library provides `eraseSector` and `eraseAllSectors` functions to support this, but the specifics
-of how to handle this is application dependent.
+of how to handle this are application dependent.
 
 Two possible strategies are:
 
@@ -85,26 +85,50 @@ Writing a record involves the following:
 
 Reading a record involves walking the file, skipping over deleted records, until a record with the specified key is found.
 
-To give an example, consider a 4-byte record with the key `0x01` and value `{ 0x1A, 0x2B, 0x3C, 0x4D }`. This key value means
-that the key and the length will be stored as 8-bit values.
+### Example using 8-bit key
+
+To give an example, consider a 4-byte record with the key `0x01` and value `{ 0x1A, 0x2B, 0x3C, 0x4D }`.
+This key value means that the key and the length will be stored as 8-bit values.
 
 So the first 12 bytes of flash will be:
 
 ```cpp
-{ 0x81, 0x04, 0x1A, 0x2B, 0x3C, 0x4D } // 0x81 is key(0x01) with top bit set, 0x04 is length
+{ 0x81, 0x04, 0x1A, 0x2B, 0x3C, 0x4D } // 0x81 is key(0x01) with bit 7 set, 0x04 is length
 { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF } // unused flash
 ```
 
 Suppose we now want to store a record with key `0x01` and value `{ 0x3A, 0x72, 0xFF, 0x11 }`.
-We cannot overwrite the old record with this value, so we must mark the old record as deleted, by clearing
-its top bit. After doing this and writing the new record the first 12 bytes of flash will be:
+We cannot overwrite the old record with this value, so we must mark the old record as deleted,
+by clearing its top bit.
+After doing this and writing the new record the first 12 bytes of flash will be:
 
 ```cpp
-{ 0x01, 0x04, 0x1A, 0x2B, 0x3C, 0x4D } // 0x01 is key with top bit cleared, ie marked as deleted, 0x04 is length
-{ 0x81, 0x04, 0x3A, 0x72, 0xFF, 0x11 } // 0x81 is key with top bit set, 0x04 is length
+{ 0x01, 0x04, 0x1A, 0x2B, 0x3C, 0x4D } // 0x01 is key with bit 7 cleared, ie marked as deleted, 0x04 is length
+{ 0x81, 0x04, 0x3A, 0x72, 0xFF, 0x11 } // 0x81 is key with bit 7 set, 0x04 is length
 ```
 
 To find a record, we walk the flash (using the length values to move from record to record), until we find the record
 with our desired key and the top bit set (indicating it is not a deleted record).
 
-Bit 6 (`0100 0000`, `0x40`) of the key set if a 16-bit key and length is being used.
+### Example using 16-bit key
+
+If we choose a key greater than 256 (0x0100) then key and length will be stored as 16-bit values.
+So to repeat the example above using a 16-bit key, let's choose the key `0x0721`.
+If we write to an empty flash, then the first 16 bytes of flash will be:
+
+```cpp
+{ 0xC7, 0x21, 0x04, 0x00, 0x1A, 0x2B, 0x3C, 0x4D } // 0xC7 is MSB of key(0x07) with bits 6 and 7 set, 0x21 is LSB of key , 0x04, 0x00 is length
+{ 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF } // unused flash
+```
+
+Note that the key is stored in bigendian format, and that bit 7 is set to denote undeleted and bit 6 is set to denote 16-bit key.
+This is the reason 8-bit keys are must be less than 64: only bits 0 to 6 are available for the key.
+
+Suppose we now want to store a record with key `0x0721` and value `{ 0x3A, 0x72, 0xFF, 0x11 }`.
+We cannot overwrite the old record with this value, so we must mark the old record as deleted, by clearing its top bit.
+After doing this and writing the new record the first 16 bytes of flash will be:
+
+```cpp
+{ 0x47, 0x21, 0x04, 0x00, 0x1A, 0x2B, 0x3C, 0x4D } // 0x47 is MSB of key(0x07) with bits 6 and 7 cleared, 0x21 is LSB of key, 0x04, 0x00 is length
+{ 0xC7, 0x21, 0x04, 0x00, 0x1A, 0x2B, 0x3C, 0x4D } // 0xC7 is MSB of key(0x07) with bits 6 and 7 set, 0x21 is LSB of key, 0x04, 0x00 is length
+```
