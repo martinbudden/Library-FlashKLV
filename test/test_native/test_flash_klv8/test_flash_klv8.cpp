@@ -57,8 +57,9 @@ struct record23_t {
 
 void test_klv8_keys()
 {
-    flashMemory.fill(0xFF);
-    FlashKLV flashKLV(&flashMemory[0], FlashKLV::SECTOR_SIZE*SECTOR_COUNT);
+    FlashKLV flashKLV(&flashMemory[0], SECTOR_COUNT);
+    flashKLV.eraseCurrentBank();
+
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(0));
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(1));
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(2));
@@ -82,8 +83,10 @@ void test_klv8_keys()
 
     TEST_ASSERT_EQUAL(true, FlashKLV::keyOK(0x0100));
     TEST_ASSERT_EQUAL(true, FlashKLV::keyOK(0x0101));
-    TEST_ASSERT_EQUAL(true, FlashKLV::keyOK(0x3FFE));
-    TEST_ASSERT_EQUAL(true, FlashKLV::keyOK(0x3FFF));
+    TEST_ASSERT_EQUAL(true, FlashKLV::keyOK(0x3FFC));
+    TEST_ASSERT_EQUAL(true, FlashKLV::keyOK(0x3FFD));
+    TEST_ASSERT_EQUAL(false, FlashKLV::keyOK(0x3FFE));
+    TEST_ASSERT_EQUAL(false, FlashKLV::keyOK(0x3FFF));
 
     TEST_ASSERT_EQUAL(false, FlashKLV::keyOK(0x4000));
     TEST_ASSERT_EQUAL(false, FlashKLV::keyOK(0x4001));
@@ -113,8 +116,8 @@ void test_klv8_keys()
 
 void test_klv8()
 {
-    flashMemory.fill(0xFF);
-    FlashKLV flashKLV(&flashMemory[0], FlashKLV::SECTOR_SIZE*SECTOR_COUNT);
+    FlashKLV flashKLV(&flashMemory[0], SECTOR_COUNT);
+    flashKLV.eraseCurrentBank();
 
     FlashKLV::klv_t klv {};
     int err {};
@@ -266,8 +269,8 @@ void test_klv8()
 
 void test_config()
 {
-    flashMemory.fill(0xFF);
-    FlashKLV flashKLV(&flashMemory[0], FlashKLV::SECTOR_SIZE*SECTOR_COUNT);
+    FlashKLV flashKLV(&flashMemory[0], SECTOR_COUNT);
+    flashKLV.eraseCurrentBank();
 
     // declare a key and structure
     enum { CONFIG_KEY = 0x01 };

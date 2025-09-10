@@ -1,7 +1,7 @@
 # Flash Key Length Value (KLV) library ![license](https://img.shields.io/badge/license-MIT-green) ![open source](https://badgen.net/badge/open/source/blue?icon=github)
 
 The FlashKLV library allows you to store data permanently on Flash memory.
-The library stores values as KeyLengthValue records.
+The library stores values as Key Length Value records.
 It can be used to save data like API keys, configuration data, network credentials, or any other data that you want to save permanently.
 
 ## Usage
@@ -11,22 +11,45 @@ Data is stored in Key Length Value format, using either 8-bit keys or 16-bit key
 | Key                       | Storage | Max length of value |
 | ------------------------- | ------- | ------------------- |
 | 1-63 (0x01-0x3F)          | 8-bit   | 255 bytes           |
-| 256-16363 (0x0100-0x3FFF) | 16-bit  | 65535 bytes         |
+| 256-16361 (0x0100-0x3FFD) | 16-bit  | 65535 bytes         |
 
-Other keys are invalid and may not be used. In particular keys of 0, 64-255, and > 16363 are invalid.
+Other keys are invalid and may not be used. In particular keys of 0, 64-255, and > 16361 are invalid.
 
-This gives a total of 16,171 usable keys.
+This gives a total of 16,169 usable keys.
 
 For keys 1 to 63, the key and the length are stored as 8-bit values and so there is an overhead of 2 bytes per record stored.
 
 For keys 256 to 16363, the key and the length are stored as 16-bit values and so there is an overhead of 4 bytes per record stored.
 
+### How much memory should I allocate for FlashTLV?
+
+FlashTLV will work using just a single sector (where a sector is the minimum erasable size of flash, 4096 bytes on the Raspberry Pi Pico)
+when using one bank of flash, or two sectors if using two banks of flash.
+
+However flash memory wears out if continually programmed and erased, and the more memory allocated for FlashTLV the less localized this wear is.
+
+So I recommend you allocate all the memory that is not otherwise used to FlashTLV. There is no disadvantage to doing this (since the
+memory is not otherwise use) and this will mean that the flash fills up less frequently and so wear is reduced. Indeed for some applications
+it may be the case the flash never fills up.
+
+So if you have 256KB of flash left over after you have programmed your Pico, then I recommend you allocate all of this 256KB
+(that is 256/4 = 64 sectors) to FlashTLV.
+
+eg:
+
+```cpp
+enum { SECTOR_COUNT = 64 };
+FlashKLV flashKLV(SECTOR_COUNT);
+```
+
 ## Example
+
+This example shows creating a FlashKLV object, writing a record, and then reading back that record.
 
 ```cpp
 // create a FlashKLV object
-enum { SECTOR_COUNT = 2 };
-FlashKLV flashKLV(FlashKLV::SECTOR_SIZE*SECTOR_COUNT);
+enum { SECTOR_COUNT = 64 };
+FlashKLV flashKLV(SECTOR_COUNT);
 
 // declare a key and structure
 enum { CONFIG_KEY = 0x01 };
@@ -36,8 +59,8 @@ struct config_t {
     uint8_t c;
 };
 
-// write the config structure to flash
-const config_t configW = { .a= 713, .b =27, .c = 12 };
+// write s config structure to flash
+const config_t configW = { .a = 713, .b =27, .c = 12 };
 int32_t err = flashKLV.write(CONFIG_KEY, sizeof(configW), &configW);
 TEST_ASSERT_EQUAL(FlashKLV::OK, err);
 
@@ -54,22 +77,40 @@ TEST_ASSERT_EQUAL(12, configR.c);
 
 ## What happens when the flash memory fills up
 
-When the flash memory fills up it must be erased before new data can be written.
+When the flash memory fills up it typically contains deleted records. These deleted records take up space which can be recovered.
 
-The library provides `eraseSector` and `eraseAllSectors` functions to support this, but the specifics
-of how to handle this are application dependent.
+One way to recover this space is to erase the flash, and then rewrite all the records from values held in memory.
 
-Two possible strategies are:
+An alternative approach is to divide the flash into two banks. When one bank fills up, erase the other bank,
+copy the records from the used bank to the other bank, and then swap banks. An example of this approach is given
+below:
 
-1. Erase all sectors, and rewrite the data from values held in memory
-2. Have two banks of flash, when the first one fills up, read from the first one and write to the second.
-   Then erase the first bank, ready for when the second bank fills up.
+```cpp
+// create a FlashKLV object with two banks of flash
+enum { SECTOR_COUNT = 32 };
+FlashKLV flashKLV(SECTOR_COUNT, FlashKLV::TWO_BANKS);
 
-## Implementation
+...
+
+const config_t configW = { .a = 713, .b =27, .c = 12 };
+int32_t err = flashKLV.write(CONFIG_KEY, sizeof(configW), &configW);
+if (err == ERROR_FLASH_FULL) {
+    // the current bank is full, so erase the other bank and copy the records to that bank
+    flashKLV.eraseOtherBank();
+    flashKLV.copyRecordsToOtherBankAndSwapBanks();
+    // we are now using the other bank, so we should have recovered enough flash to write the  record
+    err = flashKLV.write(CONFIG_KEY, sizeof(configW), &configW);
+    TEST_ASSERT_GREATER_OR_EQUAL(FlashKLV::OK, err);
+}
+// carry on using the new bank
+...
+```
+
+## Implementation of FlashTLV
 
 The implementation is designed to be "flash friendly", that is minimize the requirement to erase flash before writing new values.
 
-To do this it uses the fact that a flash bit may be changed from `1` to `0` without requiring to erase the flash.
+**To do this it uses the fact that a flash bit may be changed from `1` to `0` without needing to erase the flash.**
 
 Initially the flash memory is set to all `0xFF`. On writing a record some of these bits are cleared.
 
@@ -84,6 +125,25 @@ Writing a record involves the following:
    and a new record will be written at the end of the file.
 
 Reading a record involves walking the file, skipping over deleted records, until a record with the specified key is found.
+
+Keys can be either 16-bit or 8-bit and are stored in bigendian format (Most Significant Byte (MSB) first), since for 8-bit keys
+there is no Least Significant Byte (LSB).
+
+Two flags are used to control the interpretation of a key:
+
+1. If bit 7 is set then the key represents a record. If bit 7 is clear, then it means the record has been deleted.
+2. If bit 6 is set then the key is a 16-bit key, if bit 6 is clear then the key is a 8-bit key.
+
+| Key    | Interpretation                               |
+| ------ | -------------------------------------------- |
+| 0x01   | 8-bit key, value 0x01, record deleted        |
+| 0x81   | 8-bit key, value 0x01, record not deleted    |
+| 0x0317 | 16-bit key, value 0x0317, record deleted     |
+| 0x8317 | 16-bit key, value 0x0317, record not deleted |
+
+Additionally the keys `0x00`, `0xFFFE`, and `0xFFFF` are used internally.
+
+This restricts 8-bit keys to the range [`0x01`,`0x3F`], and 16-bit keys to the range [`0x0100`,`0x3FFD`].
 
 ### Example using 8-bit key
 
@@ -112,7 +172,7 @@ with our desired key and the top bit set (indicating it is not a deleted record)
 
 ### Example using 16-bit key
 
-If we choose a key greater than 256 (0x0100) then key and length will be stored as 16-bit values.
+If we choose a key greater than 255 then key and length will be stored as 16-bit values.
 So to repeat the example above using a 16-bit key, let's choose the key `0x0721`.
 If we write to an empty flash, then the first 16 bytes of flash will be:
 
@@ -129,6 +189,14 @@ We cannot overwrite the old record with this value, so we must mark the old reco
 After doing this and writing the new record the first 16 bytes of flash will be:
 
 ```cpp
-{ 0x47, 0x21, 0x04, 0x00, 0x1A, 0x2B, 0x3C, 0x4D } // 0x47 is MSB of key(0x07) with bits 6 and 7 cleared, 0x21 is LSB of key, 0x04, 0x00 is length
+{ 0x47, 0x21, 0x04, 0x00, 0x1A, 0x2B, 0x3C, 0x4D } // 0x47 is MSB of key(0x07) with bit 6 set and bit 7 cleared, 0x21 is LSB of key, 0x04, 0x00 is length
 { 0xC7, 0x21, 0x04, 0x00, 0x1A, 0x2B, 0x3C, 0x4D } // 0xC7 is MSB of key(0x07) with bits 6 and 7 set, 0x21 is LSB of key, 0x04, 0x00 is length
 ```
+
+## Further reading
+
+[https://www.makermatrix.com/blog/read-and-write-data-with-the-pi-pico-onboard-flash/](Read and write data with the Pi Pico onboard flash)
+
+[https://arduino-pico.readthedocs.io/en/latest/eeprom.html](EEPROM Library)
+
+[https://github.com/littlefs-project/littlefs](A little fail-safe filesystem designed for microcontrollers)

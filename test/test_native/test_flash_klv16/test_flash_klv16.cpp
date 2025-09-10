@@ -80,8 +80,10 @@ void test_flash_overwriteable()
 
 void test_klv16()
 {
-    flashMemory.fill(0xFF);
-    FlashKLV flashKLV(&flashMemory[0], FlashKLV::SECTOR_SIZE*SECTOR_COUNT);
+    FlashKLV flashKLV(&flashMemory[0], SECTOR_COUNT);
+    flashKLV.eraseCurrentBank();
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(FlashKLV::SECTOR_SIZE*SECTOR_COUNT - 1));
+
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(0));
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(1));
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(2));
@@ -108,8 +110,10 @@ void test_klv16()
 
 void test_klv()
 {
-    flashMemory.fill(0xFF);
-    FlashKLV flashKLV(&flashMemory[0], FlashKLV::SECTOR_SIZE*SECTOR_COUNT);
+    FlashKLV flashKLV(&flashMemory[0], SECTOR_COUNT);
+    flashKLV.eraseCurrentBank();
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(0));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(FlashKLV::SECTOR_SIZE*SECTOR_COUNT - 1));
 
     record4_t recordA {};
     FlashKLV::klv_t klv {};
@@ -253,8 +257,10 @@ void test_klv()
 
 void test_klv2()
 {
-    flashMemory.fill(0xFF);
-    FlashKLV flashKLV(&flashMemory[0], FlashKLV::SECTOR_SIZE*SECTOR_COUNT);
+    FlashKLV flashKLV(&flashMemory[0], SECTOR_COUNT);
+    flashKLV.eraseCurrentBank();
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(FlashKLV::SECTOR_SIZE*SECTOR_COUNT - 1));
+
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(0));
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(1));
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(2));
@@ -406,9 +412,10 @@ void test_klv2()
 
 void test_multi_page_records()
 {
-    flashMemory.fill(0xFF);
-    FlashKLV flashKLV(&flashMemory[0], FlashKLV::SECTOR_SIZE*SECTOR_COUNT);
+    FlashKLV flashKLV(&flashMemory[0], SECTOR_COUNT);
+    flashKLV.eraseCurrentBank();
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(0));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(FlashKLV::SECTOR_SIZE*SECTOR_COUNT - 1));
 
     record12_t record12A {};
     TEST_ASSERT_EQUAL(true, FlashKLV::keyOK(record12A.key));
@@ -554,9 +561,10 @@ void test_multi_page_records()
 
 void test_length_3()
 {
-    flashMemory.fill(0xFF);
-    FlashKLV flashKLV(&flashMemory[0], FlashKLV::SECTOR_SIZE*SECTOR_COUNT);
+    FlashKLV flashKLV(&flashMemory[0], SECTOR_COUNT);
+    flashKLV.eraseCurrentBank();
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(0));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(FlashKLV::SECTOR_SIZE*SECTOR_COUNT - 1));
 
     record3_t record3A {};
     TEST_ASSERT_EQUAL(true, FlashKLV::keyOK(record3A.key));
@@ -667,9 +675,10 @@ void test_length_3()
 
 void test_length_7()
 {
-    flashMemory.fill(0xFF);
-    FlashKLV flashKLV(&flashMemory[0], FlashKLV::SECTOR_SIZE*SECTOR_COUNT);
+    FlashKLV flashKLV(&flashMemory[0], SECTOR_COUNT);
+    flashKLV.eraseCurrentBank();
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(0));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(FlashKLV::SECTOR_SIZE*SECTOR_COUNT - 1));
 
     record7_t record7A {};
     TEST_ASSERT_EQUAL(true, FlashKLV::keyOK(record7A.key));
@@ -788,9 +797,10 @@ void test_length_7()
 
 void test_length_23()
 {
-    flashMemory.fill(0xFF);
-    FlashKLV flashKLV(&flashMemory[0], FlashKLV::SECTOR_SIZE*SECTOR_COUNT);
+    FlashKLV flashKLV(&flashMemory[0], SECTOR_COUNT);
+    flashKLV.eraseCurrentBank();
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(0));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(FlashKLV::SECTOR_SIZE*SECTOR_COUNT - 1));
 
     record23_t record23A {};
     TEST_ASSERT_EQUAL(true, FlashKLV::keyOK(record23A.key));

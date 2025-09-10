@@ -1,6 +1,7 @@
 {
     "cSpell.words": [
         "altera",
+        "BANKB",
         "bigendian",
         "bootrom",
         "Budden",
@@ -13,6 +14,7 @@
         "libc",
         "llvmlibc",
         "memcpy",
+        "microcontrollers",
         "noreturn",
         "overwriteable",
         "PSRAM",

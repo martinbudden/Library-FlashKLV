@@ -17,40 +17,56 @@ int flash_safe_execute(void (*fn)(void*), void* param, uint32_t timeout_ms)
 #endif
 
 
-// For RP2040 PICO_FLASH_SIZE_BYTES is 2MB or 2097152 bytes.
-// For RP2350 it is 4MB
-#if defined(FRAMEWORK_RPI_PICO)
-FlashKLV::FlashKLV(size_t flashMemorySize) :
-    _flashMemoryPtr(reinterpret_cast<uint8_t*>(XIP_BASE + PICO_FLASH_SIZE_BYTES - flashMemorySize)),
-    _flashMemorySize(flashMemorySize),
-    _sectorCount(static_cast<uint32_t>(flashMemorySize/SECTOR_SIZE))
+/*!
+If bankCount == 1 then we have one bank of flash at 
+address: flashMemoryPtr, size: SECTOR_SIZE*sectorsPerBank
+
+If bankCount == 2 then we have
+BANK_A address: flashMemoryPtr, size: SECTOR_SIZE*sectorsPerBank
+BANK_B address: flashMemoryPtr + SECTOR_SIZE*sectorsPerBank, size: SECTOR_SIZE*sectorsPerBank
+*/
+FlashKLV::FlashKLV(uint8_t* flashMemoryPtr, size_t sectorsPerBank, size_t bankCount) :
+    _flashBaseMemoryPtr(flashMemoryPtr),
+    _currentBankMemoryPtr(_flashBaseMemoryPtr),
+    _bankMemorySize(sectorsPerBank * SECTOR_SIZE),
+    _bankSectorCount(sectorsPerBank)
 {
-    assert(flashMemorySize >= SECTOR_SIZE);
-    assert(flashMemorySize % SECTOR_SIZE == 0);
+    assert(bankCount == 1 || bankCount == 2);
+
+    uint8_t* BANK_A_PTR = flashMemoryPtr;
+    uint8_t* BANK_B_PTR = flashMemoryPtr + _bankMemorySize; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+    if (bankCount == 2) {
+        // if the BANK_B has data in it, then that should be the current bank
+        if (memcmp(BANK_B_PTR, &BANK_HEADER[0], sizeof(BANK_HEADER)) == 0) {
+            _currentBankMemoryPtr = BANK_B_PTR;
+            _otherBankMemoryPtr = BANK_A_PTR;
+        } else {
+            _currentBankMemoryPtr = BANK_A_PTR;
+            _otherBankMemoryPtr = BANK_B_PTR;
+        }
+    }
+#if defined(FRAMEWORK_RPI_PICO)
     static_assert(FLASH_SECTOR_SIZE == SECTOR_SIZE);
     static_assert(FLASH_PAGE_SIZE == PAGE_SIZE);
-}
-#else
-FlashKLV::FlashKLV(size_t flashMemorySize) :
-    _flashMemoryPtr(nullptr),
-    _flashMemorySize(flashMemorySize),
-    _sectorCount(static_cast<uint32_t>(flashMemorySize/SECTOR_SIZE))
-{
-    assert(flashMemorySize >= SECTOR_SIZE);
-    assert(flashMemorySize % SECTOR_SIZE == 0);
-}
 #endif
+}
 
-#if defined(FRAMEWORK_TEST)
-FlashKLV::FlashKLV(uint8_t* flashMemoryPtr, size_t flashMemorySize) :
-    _flashMemoryPtr(flashMemoryPtr),
-    _flashMemorySize(flashMemorySize),
-    _sectorCount(static_cast<uint32_t>(flashMemorySize/SECTOR_SIZE))
-{
-    assert(flashMemorySize >= SECTOR_SIZE);
-    assert(flashMemorySize % SECTOR_SIZE == 0);
-}
+// For RP2040 PICO_FLASH_SIZE_BYTES is 2MB or 2097152 bytes.
+// For RP2350 it is 4MB
+FlashKLV::FlashKLV(size_t sectorsPerBank, size_t bankCount) : // NOLINT(cppcoreguidelines-pro-type-member-init,hicpp-member-init)
+#if defined(FRAMEWORK_RPI_PICO)
+    FlashKLV(reinterpret_cast<uint8_t*>(XIP_BASE + PICO_FLASH_SIZE_BYTES - SECTOR_SIZE*sectorsPerBank*bankCount), sectorsPerBank, bankCount)
+#else
+    FlashKLV(nullptr, sectorsPerBank, bankCount)
 #endif
+{
+}
+
+FlashKLV::FlashKLV(uint8_t* flashMemoryPtr, size_t sectorsPerBank) :
+    FlashKLV(flashMemoryPtr, sectorsPerBank, ONE_BANK) {}
+
+FlashKLV::FlashKLV(size_t sectorsPerBank) :
+    FlashKLV(sectorsPerBank, ONE_BANK) {}
 
 /*!
 Flash can be overwritten if bits are only flipped from 1 to 0, never from 0 to 1
@@ -93,7 +109,7 @@ uint16_t FlashKLV::getRecordKey(size_t pos, const uint8_t* flashMemoryPtr)
     }
     // note byte order is reversed, this is done because and empty record is denoted by setting the high bit of the high byte to zero.
     uint16_t key16 = key8;
-    key16 = (key16 << 8U) | flashMemoryPtr[pos+1]; // NOLINT(cppcoreguidelines-avoid-magic-numbers,hicpp-signed-bitwise,readability-magic-numbers)
+    key16 = (key16 << 8U) | flashMemoryPtr[pos + 1]; // NOLINT(cppcoreguidelines-avoid-magic-numbers,hicpp-signed-bitwise,readability-magic-numbers)
     if (key16 == RECORD_KEY_EMPTY) {
         return RECORD_KEY_EMPTY;
     }
@@ -144,12 +160,12 @@ size_t FlashKLV::bytesFree() const
     uint16_t flashRecordKey = getRecordKey(pos);
     while (!isEmpty(flashRecordKey)) {
         pos += getRecordPositionIncrement(pos);
-        if (pos >= _flashMemorySize) {
+        if (pos >= _bankMemorySize) {
             return 0;
         }
         flashRecordKey = getRecordKey(pos);
     }
-    return _flashMemorySize - pos;
+    return _bankMemorySize - pos;
 }
 
 int32_t FlashKLV::remove(uint16_t key, uint8_t* flashMemoryPtr)
@@ -166,7 +182,7 @@ int32_t FlashKLV::remove(uint16_t key, uint8_t* flashMemoryPtr)
             return OK;
         }
         pos += getRecordPositionIncrement(pos);
-        if (pos >= _flashMemorySize) {
+        if (pos >= _bankMemorySize) {
             return ERROR_NOT_FOUND;
         }
         flashRecordKey = getRecordKey(pos);
@@ -191,7 +207,7 @@ FlashKLV::klv_t FlashKLV::find(uint16_t key) const
             return klv_t {.key = key, .length = getRecordLength(pos), .valuePtr = getRecordValuePtr(pos)};
         }
         pos += getRecordPositionIncrement(pos);
-        if (pos >= _flashMemorySize) {
+        if (pos >= _bankMemorySize) {
             return klv_t {.key = NOT_FOUND, .length = 0, .valuePtr = nullptr};
         }
         flashRecordKey = getRecordKey(pos);
@@ -201,6 +217,8 @@ FlashKLV::klv_t FlashKLV::find(uint16_t key) const
 
 /*!
 Find the next undeleted record with any key, starting at pos.
+
+Find always searches the current bank.
 */
 FlashKLV::klv_t FlashKLV::findNext(size_t pos) const
 {
@@ -218,7 +236,7 @@ FlashKLV::klv_t FlashKLV::findNext(size_t pos) const
             return klv_t {.key = flashRecordKey, .length = getRecordLength(pos), .valuePtr = getRecordValuePtr(pos)};
         }
         pos += getRecordPositionIncrement(pos);
-        if (pos >= _flashMemorySize) {
+        if (pos >= _bankMemorySize) {
             return klv_t {.key = NOT_FOUND, .length = 0, .valuePtr = nullptr};
         }
         flashRecordKey = getRecordKey(pos);
@@ -226,7 +244,60 @@ FlashKLV::klv_t FlashKLV::findNext(size_t pos) const
     return klv_t {.key = NOT_FOUND, .length = 0, .valuePtr = nullptr};
 }
 
+int32_t FlashKLV::copyRecordsToOtherBank()
+{
+    if (_otherBankMemoryPtr == nullptr) {
+        return ERROR_OTHER_BANK_NOT_INITIALIZED;
+    }
 
+    if (!isOtherBankErased()) {
+        return ERROR_OTHER_BANK_NOT_ERASED;
+    }
+
+    size_t writePos = sizeof(BANK_HEADER);
+    flashReadPage(0, _otherBankMemoryPtr);
+    memcpy(&_pageCache[0], &BANK_HEADER[0], sizeof(BANK_HEADER));
+    flashWritePage(0, _otherBankMemoryPtr);
+
+    size_t pos = 0;
+    uint16_t flashRecordKey = getRecordKey(pos);
+    if (isEmpty(flashRecordKey)) {
+        return OK_NOTHING_TO_COPY;
+    }
+
+    while (!isEmpty(flashRecordKey)) {
+        if (flashRecordKey != RECORD_KEY_DELETED && flashRecordKey != RECORD_KEY_BANK_HEADER) {
+            // not a deleted record, so write it to the other bank
+            flashDeleteAndWrite(NO_DELETE, writePos, flashRecordKey, getRecordLength(pos), getRecordValuePtr(pos), _otherBankMemoryPtr);
+            writePos += getRecordPositionIncrement(pos);
+        }
+        pos += getRecordPositionIncrement(pos);
+        if (pos >= _bankMemorySize) {
+            return ERROR_FLASH_FULL;
+        }
+        flashRecordKey = getRecordKey(pos);
+    }
+    return writePos > sizeof(BANK_HEADER) ? OK : OK_NO_RECORDS_COPIED;
+}
+
+int32_t FlashKLV::copyRecordsToOtherBankAndSwapBanks()
+{
+    const int32_t err = copyRecordsToOtherBank();
+    if (err < 0) {
+        return err;
+    }
+    swapBanks();
+    // erase the first sector of the other bank, so that it will not be chosen as the current bank on the next FlashKLV construction
+    eraseSector(0, _otherBankMemoryPtr);
+
+    return err;
+}
+
+/*!
+Read the record with the given key.
+
+Read always reads the current bank.
+*/
 int32_t FlashKLV::read(void* value, size_t size, uint16_t key) const
 {
     if (!keyOK(key)) {
@@ -248,6 +319,11 @@ int32_t FlashKLV::read(void* value, size_t size, uint16_t key) const
     return OK;
 }
 
+/*
+Write a record
+
+May write to either the current bank or the other bank, as defined by flashMemoryPtr.
+*/
 int32_t FlashKLV::write(uint16_t key, uint16_t length, const uint8_t* valuePtr, uint8_t* flashMemoryPtr)
 {
     if (!keyOK(key)) {
@@ -280,7 +356,7 @@ int32_t FlashKLV::write(uint16_t key, uint16_t length, const uint8_t* valuePtr, 
         }
 
         pos += getRecordPositionIncrement(pos);
-        if (pos + length > _flashMemorySize) {
+        if (pos + length > _bankMemorySize) {
             // not enough space for the new record
             return ERROR_FLASH_FULL;
         }
@@ -303,32 +379,67 @@ void FlashKLV::call_flash_range_erase(void* param)
 #endif
 }
 
-void FlashKLV::eraseSector(uint32_t sector)
+int32_t FlashKLV::eraseSector(size_t sector, uint8_t* flashBankMemoryPtr) // NOLINT(readability-non-const-parameter)
 {
+    if (flashBankMemoryPtr == nullptr) {
+        return ERROR_INVALID_FLASH_BANK_PTR;
+    }
+
+    bool alreadyErased = true;
+    enum { BYTE_ERASED = 0xFF };
+    for (size_t ii = 0; ii < SECTOR_SIZE; ++ii) {
+        if (*(flashBankMemoryPtr + sector*SECTOR_SIZE + ii) != BYTE_ERASED) { // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+            alreadyErased = false;
+        }
+    }
+    if (alreadyErased) {
+        return OK_SECTOR_ALREADY_ERASED;
+    }
 #if defined(FRAMEWORK_RPI_PICO)
     // Flash is "execute in place" and so will be in use when any code that is stored in flash runs, e.g. an interrupt handler
     // or code running on a different core.
     // Calling flash_range_erase or flash_range_program at the same time as flash is running code would cause a crash.
     // flash_safe_execute disables interrupts and tries to cooperate with the other core to ensure flash is not in use
     // See the documentation for flash_safe_execute and its assumptions and limitations
-    erase_params_t params = { .address = &_flashMemoryPtr[SECTOR_SIZE * sector], .count = SECTOR_SIZE }; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+    erase_params_t params = { .address = &flashBankMemoryPtr[SECTOR_SIZE * sector], .count = SECTOR_SIZE }; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
     const int err = flash_safe_execute(call_flash_range_erase, &params, UINT32_MAX);
     hard_assert(err == PICO_OK);
 #else
-    (void)sector;
+    memset(flashBankMemoryPtr + sector*SECTOR_SIZE, 0xFF, SECTOR_SIZE);
 #endif
+    return OK;
 }
 
-void FlashKLV::eraseAllSectors()
+bool FlashKLV::isSectorErased(size_t sector, const uint8_t* flashBankMemoryPtr)
 {
-    for (uint32_t ii = 0; ii < _sectorCount; ++ii) {
-        eraseSector(ii);
+    enum { BYTE_ERASED = 0xFF };
+
+    const uint8_t* memoryPtr = flashBankMemoryPtr + sector*SECTOR_SIZE; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+    for (size_t ii = 0; ii < SECTOR_SIZE; ++ii) {
+        if (*(memoryPtr + ii) != BYTE_ERASED) { // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+            return false;
+        }
     }
+    return true;
 }
 
-void FlashKLV::eraseBank(bank_index_e bankIndex)
+bool FlashKLV::isBankErased(const uint8_t* flashBankMemoryPtr) const
 {
-    (void)bankIndex;
+    enum { BYTE_ERASED = 0xFF };
+    for (size_t ii = 0; ii < _bankMemorySize; ++ii) {
+        if (*(flashBankMemoryPtr + ii) != BYTE_ERASED) { // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+            return false;
+        }
+    }
+    return true;
+}
+
+int32_t FlashKLV::eraseBank(uint8_t* flashBankMemoryPtr) // NOLINT(readability-make-member-function-const)
+{
+    for (uint32_t ii = 0; ii < _bankSectorCount; ++ii) {
+        eraseSector(ii, flashBankMemoryPtr);
+    }
+    return OK;
 }
 
 void FlashKLV::flashMarkRecordAsDeleted(size_t pos, uint8_t* flashMemoryPtr)
