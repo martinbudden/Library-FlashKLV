@@ -6,3 +6,9 @@
 !.vscode/settings.json
 
 compile_commands.json
+c_cpp_properties.json
+launch.json
+
+examples/*/.gitignore
+examples/*/.vscode/*.*
+!examples/*/.vscode/settings.json
