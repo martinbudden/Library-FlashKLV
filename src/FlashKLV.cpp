@@ -4,7 +4,6 @@
 
 
 #if defined(FRAMEWORK_RPI_PICO)
-
 #include <hardware/flash.h>
 #include <hardware/sync.h>
 #include <pico/flash.h>
@@ -405,13 +404,17 @@ int32_t FlashKLV::eraseSector(size_t sector, uint8_t* flashBankMemoryPtr) // NOL
     // Calling flash_range_erase or flash_range_program at the same time as flash is running code would cause a crash.
     // flash_safe_execute disables interrupts and tries to cooperate with the other core to ensure flash is not in use
     // See the documentation for flash_safe_execute and its assumptions and limitations
-#if defined(LIBRARY_FLASH_KLV_USE_DISABLE_INTERRUPTS)
-    const uint32_t interrupts = save_and_disable_interrupts();
-    flash_range_erase(reinterpret_cast<uint32_t>(params.address) - XIP_BASE, params.count);
-    restore_interrupts(interrupts);
-#else
     const int err = flash_safe_execute(call_flash_range_erase, &params, UINT32_MAX);
     hard_assert(err == PICO_OK);
+#elif defined(FRAMEWORK_ARDUINO_RPI_PICO)
+#ifndef __FREERTOS
+    noInterrupts();
+#endif
+    rp2040.idleOtherCore();
+    flash_range_erase(reinterpret_cast<uint32_t>(params.address) - XIP_BASE, params.count);
+    rp2040.resumeOtherCore();
+#ifndef __FREERTOS
+    interrupts();
 #endif
 #else
     flash_safe_execute(call_flash_range_erase, &params, UINT32_MAX);
@@ -484,13 +487,17 @@ void FlashKLV::flashWritePage(size_t pageIndex, uint8_t* flashMemoryPtr) // NOLI
 {
     program_params_t params = { .address = &flashMemoryPtr[pageIndex*PAGE_SIZE], .data = &_pageCache[0] };
 #if defined(FRAMEWORK_RPI_PICO)
-#if defined(LIBRARY_FLASH_KLV_USE_DISABLE_INTERRUPTS)
-    const uint32_t interrupts = save_and_disable_interrupts();
-    flash_range_program(reinterpret_cast<uint32_t>(params.address) - XIP_BASE, params.data, PAGE_SIZE); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-    restore_interrupts(interrupts);
-#else
     const int err = flash_safe_execute(call_flash_range_program, &params, UINT32_MAX);
     hard_assert(err == PICO_OK);
+#elif defined(FRAMEWORK_ARDUINO_RPI_PICO)
+#ifndef __FREERTOS
+    noInterrupts();
+#endif
+    rp2040.idleOtherCore();
+    flash_range_program(reinterpret_cast<uint32_t>(params.address) - XIP_BASE, params.data, PAGE_SIZE); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+    rp2040.resumeOtherCore();
+#ifndef __FREERTOS
+    interrupts();
 #endif
 #else
     flash_safe_execute(call_flash_range_program, &params, UINT32_MAX);
