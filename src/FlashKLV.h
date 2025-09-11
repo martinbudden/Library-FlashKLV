@@ -123,6 +123,7 @@ public:
     uint8_t flashPeekOther(size_t pos) { return _otherBankMemoryPtr[pos]; } //!< for testing
     const uint8_t* getCurrentBankMemoryPtr() const { return _currentBankMemoryPtr; }
     const uint8_t* getOtherBankMemoryPtr() const { return _otherBankMemoryPtr; }
+    int32_t eraseSector(size_t sector) { return eraseSector(sector, _currentBankMemoryPtr); }
 protected:
     uint8_t* _flashBaseMemoryPtr;
     uint8_t* _currentBankMemoryPtr;

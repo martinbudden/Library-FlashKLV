@@ -27,15 +27,15 @@ BANK_B address: flashMemoryPtr + SECTOR_SIZE*sectorsPerBank, size: SECTOR_SIZE*s
 */
 FlashKLV::FlashKLV(uint8_t* flashMemoryPtr, size_t sectorsPerBank, size_t bankCount) :
     _flashBaseMemoryPtr(flashMemoryPtr),
-    _currentBankMemoryPtr(_flashBaseMemoryPtr),
+    _currentBankMemoryPtr(flashMemoryPtr),
     _bankMemorySize(sectorsPerBank * SECTOR_SIZE),
     _bankSectorCount(sectorsPerBank)
 {
     assert(bankCount == 1 || bankCount == 2);
 
-    uint8_t* BANK_A_PTR = flashMemoryPtr;
-    uint8_t* BANK_B_PTR = flashMemoryPtr + _bankMemorySize; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
     if (bankCount == 2) {
+        uint8_t* BANK_A_PTR = flashMemoryPtr;
+        uint8_t* BANK_B_PTR = flashMemoryPtr + _bankMemorySize; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
         // if the BANK_B has data in it, then that should be the current bank
         if (memcmp(BANK_B_PTR, &BANK_HEADER[0], sizeof(BANK_HEADER)) == 0) {
             _currentBankMemoryPtr = BANK_B_PTR;
@@ -397,26 +397,21 @@ int32_t FlashKLV::eraseSector(size_t sector, uint8_t* flashBankMemoryPtr) // NOL
     if (alreadyErased) {
         return OK_SECTOR_ALREADY_ERASED;
     }
-    erase_params_t params = { .address = &flashBankMemoryPtr[SECTOR_SIZE * sector], .count = SECTOR_SIZE }; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic,misc-const-correctness)
-#if defined(FRAMEWORK_RPI_PICO)
+#if defined(FRAMEWORK_ARDUINO_RPI_PICO)
+    const uint32_t interrupts = save_and_disable_interrupts();
+    flash_range_erase(reinterpret_cast<uint32_t>(&flashBankMemoryPtr[SECTOR_SIZE * sector]) - XIP_BASE, SECTOR_SIZE);
+    restore_interrupts (interrupts);
+#elif defined(FRAMEWORK_RPI_PICO)
     // Flash is "execute in place" and so will be in use when any code that is stored in flash runs, e.g. an interrupt handler
     // or code running on a different core.
     // Calling flash_range_erase or flash_range_program at the same time as flash is running code would cause a crash.
     // flash_safe_execute disables interrupts and tries to cooperate with the other core to ensure flash is not in use
     // See the documentation for flash_safe_execute and its assumptions and limitations
+    erase_params_t params = { .address = &flashBankMemoryPtr[SECTOR_SIZE * sector], .count = SECTOR_SIZE }; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic,misc-const-correctness)
     const int err = flash_safe_execute(call_flash_range_erase, &params, UINT32_MAX);
     hard_assert(err == PICO_OK);
-#elif defined(FRAMEWORK_ARDUINO_RPI_PICO)
-#ifndef __FREERTOS
-    noInterrupts();
-#endif
-    rp2040.idleOtherCore();
-    flash_range_erase(reinterpret_cast<uint32_t>(params.address) - XIP_BASE, params.count);
-    rp2040.resumeOtherCore();
-#ifndef __FREERTOS
-    interrupts();
-#endif
 #else
+    erase_params_t params = { .address = &flashBankMemoryPtr[SECTOR_SIZE * sector], .count = SECTOR_SIZE }; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic,misc-const-correctness)
     flash_safe_execute(call_flash_range_erase, &params, UINT32_MAX);
 #endif // FRAMEWORK
     return OK;
@@ -485,21 +480,16 @@ void FlashKLV::call_flash_range_program(void* param)
 
 void FlashKLV::flashWritePage(size_t pageIndex, uint8_t* flashMemoryPtr) // NOLINT(readability-convert-member-functions-to-static)
 {
+#if defined(FRAMEWORK_ARDUINO_RPI_PICO)
+    const uint32_t interrupts = save_and_disable_interrupts();
+    flash_range_program(reinterpret_cast<uint32_t>(&flashMemoryPtr[pageIndex*PAGE_SIZE]) - XIP_BASE, &_pageCache[0], FLASH_PAGE_SIZE);
+    restore_interrupts (interrupts);
+#elif defined(FRAMEWORK_RPI_PICO)
     program_params_t params = { .address = &flashMemoryPtr[pageIndex*PAGE_SIZE], .data = &_pageCache[0] };
-#if defined(FRAMEWORK_RPI_PICO)
     const int err = flash_safe_execute(call_flash_range_program, &params, UINT32_MAX);
     hard_assert(err == PICO_OK);
-#elif defined(FRAMEWORK_ARDUINO_RPI_PICO)
-#ifndef __FREERTOS
-    noInterrupts();
-#endif
-    rp2040.idleOtherCore();
-    flash_range_program(reinterpret_cast<uint32_t>(params.address) - XIP_BASE, params.data, PAGE_SIZE); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-    rp2040.resumeOtherCore();
-#ifndef __FREERTOS
-    interrupts();
-#endif
 #else
+    program_params_t params = { .address = &flashMemoryPtr[pageIndex*PAGE_SIZE], .data = &_pageCache[0] };
     flash_safe_execute(call_flash_range_program, &params, UINT32_MAX);
 #endif
 }
