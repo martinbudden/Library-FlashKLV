@@ -53,6 +53,10 @@ public:
         uint16_t key;
         uint16_t length;
     };
+    struct record_count_t {
+        size_t recordCount;
+        size_t deletedRecordCount;
+    };
 protected:
     struct erase_params_t {
         uint8_t* address;
@@ -77,6 +81,7 @@ public:
     klv_t find(uint16_t key) const;
     klv_t findNext(size_t pos) const;
     size_t findFirstFreePos() const;
+    record_count_t countRecords() const;
     int32_t copyRecordsToOtherBankAndSwapBanks();
     int32_t read(void* value, size_t size,  uint16_t key) const;
 

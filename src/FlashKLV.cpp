@@ -271,6 +271,28 @@ FlashKLV::klv_t FlashKLV::findNext(size_t pos) const
     return klv_t {.key = NOT_FOUND, .length = 0, .valuePtr = nullptr};
 }
 
+FlashKLV::record_count_t FlashKLV::countRecords() const
+{
+    record_count_t count{ .recordCount = 0, .deletedRecordCount = 0 };
+
+    // walk the flash to count the records
+    size_t pos = 0;
+    uint16_t flashRecordKey = getRecordKey(pos);
+    while (!isEmpty(flashRecordKey)) {
+        if (flashRecordKey == RECORD_KEY_DELETED) {
+            ++count.deletedRecordCount;
+        } else {
+            ++count.recordCount;
+        }
+        pos += getRecordPositionIncrement(pos);
+        if (pos >= _bankMemorySize) {
+            return count;
+        }
+        flashRecordKey = getRecordKey(pos);
+    }
+    return count;
+}
+
 /*!
 Copy all undeleted records to the other bank.
 */
