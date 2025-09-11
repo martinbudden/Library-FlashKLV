@@ -4,16 +4,29 @@
 
 
 #if defined(FRAMEWORK_RPI_PICO)
+
+#elif defined(FRAMEWORK_ESPIDF)
+
+#elif defined(FRAMEWORK_TEST)
+
+int flash_safe_execute(void (*fn)(void*), void* param, uint32_t timeout_ms) { (void)timeout_ms; fn(param); return 0; }
+
+#else // defaults to FRAMEWORK_ARDUINO
+
+#if defined(FRAMEWORK_ARDUINO_RPI_PICO)
+#elif defined(FRAMEWORK_ARDUINO_ESP32)
+#elif defined(FRAMEWORK_ARDUINO_STM32)
+#else
+// No FRAMEWORK defined, so default to FRAMEWORK_ARDUINO_RPI_PICO so this code can be used within Arduino IDE
+#define FRAMEWORK_ARDUINO_RPI_PICO
+#endif // FRAMEWORK_ARDUINO
+
+#endif // FRAMEWORK
+
+#if defined(FRAMEWORK_RPI_PICO) || defined(FRAMEWORK_ARDUINO_RPI_PICO)
 #include <hardware/flash.h>
 #include <hardware/sync.h>
 #include <pico/flash.h>
-#else
-int flash_safe_execute(void (*fn)(void*), void* param, uint32_t timeout_ms)
-{
-    (void)timeout_ms;
-    fn(param);
-    return 0;
-}
 #endif
 
 
@@ -45,16 +58,18 @@ FlashKLV::FlashKLV(uint8_t* flashMemoryPtr, size_t sectorsPerBank, size_t bankCo
             _otherBankMemoryPtr = BANK_B_PTR;
         }
     }
-#if defined(FRAMEWORK_RPI_PICO)
+#if defined(FRAMEWORK_RPI_PICO) || defined(FRAMEWORK_ARDUINO_RPI_PICO)
     static_assert(FLASH_SECTOR_SIZE == SECTOR_SIZE);
     static_assert(FLASH_PAGE_SIZE == PAGE_SIZE);
 #endif
 }
 
-// For RP2040 PICO_FLASH_SIZE_BYTES is 2MB or 2097152 bytes.
-// For RP2350 it is 4MB
+/*!
+For RP2040 PICO_FLASH_SIZE_BYTES is typically 2MB (2097152 bytes).
+For RP2350 it is typically 4MB
+*/
 FlashKLV::FlashKLV(size_t sectorsPerBank, size_t bankCount) : // NOLINT(cppcoreguidelines-pro-type-member-init,hicpp-member-init)
-#if defined(FRAMEWORK_RPI_PICO)
+#if defined(FRAMEWORK_RPI_PICO) || defined(FRAMEWORK_ARDUINO_RPI_PICO)
     FlashKLV(reinterpret_cast<uint8_t*>(XIP_BASE + PICO_FLASH_SIZE_BYTES - SECTOR_SIZE*sectorsPerBank*bankCount), sectorsPerBank, bankCount)
 #else
     FlashKLV(nullptr, sectorsPerBank, bankCount)
@@ -168,6 +183,9 @@ size_t FlashKLV::bytesFree() const
     return _bankMemorySize - pos;
 }
 
+/*!
+Remove the record with the specified key by marking it as deleted.
+*/
 int32_t FlashKLV::remove(uint16_t key, uint8_t* flashMemoryPtr)
 {
     if (!keyOK(key)) {
@@ -192,6 +210,8 @@ int32_t FlashKLV::remove(uint16_t key, uint8_t* flashMemoryPtr)
 
 /*!
 Find the record with the specified key.
+
+Find always searches the current bank.
 */
 FlashKLV::klv_t FlashKLV::find(uint16_t key) const
 {
@@ -244,6 +264,9 @@ FlashKLV::klv_t FlashKLV::findNext(size_t pos) const
     return klv_t {.key = NOT_FOUND, .length = 0, .valuePtr = nullptr};
 }
 
+/*!
+Copy all undeleted records to the other bank.
+*/
 int32_t FlashKLV::copyRecordsToOtherBank()
 {
     if (_otherBankMemoryPtr == nullptr) {
@@ -280,6 +303,9 @@ int32_t FlashKLV::copyRecordsToOtherBank()
     return writePos > sizeof(BANK_HEADER) ? OK : OK_NO_RECORDS_COPIED;
 }
 
+/*!
+Copy all undeleted records to the other bank, and switch to using the other bank.
+*/
 int32_t FlashKLV::copyRecordsToOtherBankAndSwapBanks()
 {
     const int32_t err = copyRecordsToOtherBank();
@@ -322,7 +348,7 @@ int32_t FlashKLV::read(void* value, size_t size, uint16_t key) const
 /*
 Write a record
 
-May write to either the current bank or the other bank, as defined by flashMemoryPtr.
+Write to either the current bank or the other bank, as defined by flashMemoryPtr.
 */
 int32_t FlashKLV::write(uint16_t key, uint16_t length, const uint8_t* valuePtr, uint8_t* flashMemoryPtr)
 {
@@ -368,55 +394,9 @@ int32_t FlashKLV::write(uint16_t key, uint16_t length, const uint8_t* valuePtr, 
     return OK;
 }
 
-// This function is called via `flash_safe_execute()`
-void FlashKLV::call_flash_range_erase(void* param)
-{
-    const erase_params_t* params = reinterpret_cast<erase_params_t*>(param); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-#if defined(FRAMEWORK_RPI_PICO)
-    flash_range_erase(reinterpret_cast<uint32_t>(params->address) - XIP_BASE, params->count);
-#elif defined(FRAMEWORK_TEST)
-    memset(params->address, 0xFF, params->count);
-#else
-    (void)params;
-#endif
-}
-
-int32_t FlashKLV::eraseSector(size_t sector, uint8_t* flashBankMemoryPtr) // NOLINT(readability-non-const-parameter)
-{
-    if (flashBankMemoryPtr == nullptr) {
-        return ERROR_INVALID_FLASH_BANK_PTR;
-    }
-
-    bool alreadyErased = true;
-    enum { BYTE_ERASED = 0xFF };
-    for (size_t ii = 0; ii < SECTOR_SIZE; ++ii) {
-        if (*(flashBankMemoryPtr + sector*SECTOR_SIZE + ii) != BYTE_ERASED) { // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-            alreadyErased = false;
-        }
-    }
-    if (alreadyErased) {
-        return OK_SECTOR_ALREADY_ERASED;
-    }
-#if defined(FRAMEWORK_ARDUINO_RPI_PICO)
-    const uint32_t interrupts = save_and_disable_interrupts();
-    flash_range_erase(reinterpret_cast<uint32_t>(&flashBankMemoryPtr[SECTOR_SIZE * sector]) - XIP_BASE, SECTOR_SIZE);
-    restore_interrupts (interrupts);
-#elif defined(FRAMEWORK_RPI_PICO)
-    // Flash is "execute in place" and so will be in use when any code that is stored in flash runs, e.g. an interrupt handler
-    // or code running on a different core.
-    // Calling flash_range_erase or flash_range_program at the same time as flash is running code would cause a crash.
-    // flash_safe_execute disables interrupts and tries to cooperate with the other core to ensure flash is not in use
-    // See the documentation for flash_safe_execute and its assumptions and limitations
-    erase_params_t params = { .address = &flashBankMemoryPtr[SECTOR_SIZE * sector], .count = SECTOR_SIZE }; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic,misc-const-correctness)
-    const int err = flash_safe_execute(call_flash_range_erase, &params, UINT32_MAX);
-    hard_assert(err == PICO_OK);
-#else
-    erase_params_t params = { .address = &flashBankMemoryPtr[SECTOR_SIZE * sector], .count = SECTOR_SIZE }; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic,misc-const-correctness)
-    flash_safe_execute(call_flash_range_erase, &params, UINT32_MAX);
-#endif // FRAMEWORK
-    return OK;
-}
-
+/*!
+Check if a sector of flash is erased (ie every byte has the value `0xFF`)
+*/
 bool FlashKLV::isSectorErased(size_t sector, const uint8_t* flashBankMemoryPtr)
 {
     enum { BYTE_ERASED = 0xFF };
@@ -430,6 +410,9 @@ bool FlashKLV::isSectorErased(size_t sector, const uint8_t* flashBankMemoryPtr)
     return true;
 }
 
+/*!
+Check if a bank of flash is erased (ie every byte has the value `0xFF`)
+*/
 bool FlashKLV::isBankErased(const uint8_t* flashBankMemoryPtr) const
 {
     enum { BYTE_ERASED = 0xFF };
@@ -441,6 +424,9 @@ bool FlashKLV::isBankErased(const uint8_t* flashBankMemoryPtr) const
     return true;
 }
 
+/*!
+Erase an entire bank of flash, erasing in sector sized chunks.
+*/
 int32_t FlashKLV::eraseBank(uint8_t* flashBankMemoryPtr) // NOLINT(readability-make-member-function-const)
 {
     for (uint32_t ii = 0; ii < _bankSectorCount; ++ii) {
@@ -449,6 +435,9 @@ int32_t FlashKLV::eraseBank(uint8_t* flashBankMemoryPtr) // NOLINT(readability-m
     return OK;
 }
 
+/*!
+Mark the record at `pos` as deleted by setting bit 7 to zero.
+*/
 void FlashKLV::flashMarkRecordAsDeleted(size_t pos, uint8_t* flashMemoryPtr)
 {
     const size_t pageIndex = pos / PAGE_SIZE;
@@ -460,40 +449,17 @@ void FlashKLV::flashMarkRecordAsDeleted(size_t pos, uint8_t* flashMemoryPtr)
     flashWritePage(pageIndex, flashMemoryPtr);
 }
 
+/*!
+Read flash memory into the page cache.
+*/
 void FlashKLV::flashReadPage(size_t pageIndex, const uint8_t* flashMemoryPtr)
 {
     memcpy(&_pageCache[0], &flashMemoryPtr[pageIndex*PAGE_SIZE], PAGE_SIZE);
 }
 
-// This function is called via `flash_safe_execute()`
-void FlashKLV::call_flash_range_program(void* param)
-{
-    const program_params_t* params = reinterpret_cast<program_params_t*>(param); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-#if defined(FRAMEWORK_RPI_PICO)
-    flash_range_program(reinterpret_cast<uint32_t>(params->address) - XIP_BASE, params->data, PAGE_SIZE); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-#elif defined(FRAMEWORK_TEST)
-    memcpy(params->address, params->data, PAGE_SIZE);
-#else
-    (void)params;
-#endif
-}
-
-void FlashKLV::flashWritePage(size_t pageIndex, uint8_t* flashMemoryPtr) // NOLINT(readability-convert-member-functions-to-static)
-{
-#if defined(FRAMEWORK_ARDUINO_RPI_PICO)
-    const uint32_t interrupts = save_and_disable_interrupts();
-    flash_range_program(reinterpret_cast<uint32_t>(&flashMemoryPtr[pageIndex*PAGE_SIZE]) - XIP_BASE, &_pageCache[0], FLASH_PAGE_SIZE);
-    restore_interrupts (interrupts);
-#elif defined(FRAMEWORK_RPI_PICO)
-    program_params_t params = { .address = &flashMemoryPtr[pageIndex*PAGE_SIZE], .data = &_pageCache[0] };
-    const int err = flash_safe_execute(call_flash_range_program, &params, UINT32_MAX);
-    hard_assert(err == PICO_OK);
-#else
-    program_params_t params = { .address = &flashMemoryPtr[pageIndex*PAGE_SIZE], .data = &_pageCache[0] };
-    flash_safe_execute(call_flash_range_program, &params, UINT32_MAX);
-#endif
-}
-
+/*!
+write the data at `valuePtr` to flash in page-sized chunks using `flashWritePage`
+*/
 void FlashKLV::flashWrite(size_t pos, uint16_t length, const uint8_t* valuePtr, uint8_t* flashMemoryPtr)
 {
     while (length != 0) {
@@ -519,6 +485,10 @@ void FlashKLV::flashWrite(size_t pos, uint16_t length, const uint8_t* valuePtr, 
     }
 }
 
+/*!
+Mark the current instance of a record as deleted if `deletePos != NO_DELETE` and then
+write the new record in page-sized chunks using `flashWritePage`
+*/
 void FlashKLV::flashDeleteAndWrite(size_t deletePos, size_t pos, uint16_t key, uint16_t length, const uint8_t* valuePtr, uint8_t* flashMemoryPtr)
 {
     size_t pageIndex = pos / PAGE_SIZE;
@@ -586,4 +556,130 @@ void FlashKLV::flashDeleteAndWrite(size_t deletePos, size_t pos, uint16_t key, u
     valuePtr += bytesToEndOfPage; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
     length -= static_cast<uint16_t>(bytesToEndOfPage);
     flashWrite(pos, length, valuePtr, flashMemoryPtr);
+}
+
+
+/*
+PLATFORM SPECIFIC CODE
+
+On Raspberry Pi Pico Flash is "execute in place" and so will be in use when any code that is stored in flash runs,
+e.g. an interrupt handler or code running on a different core.
+
+The code below ensures this will not happen, either by disabling interrupts or using `flash_safe_execute`, depending on the platform.
+
+Calling `flash_range_erase` or `flash_range_program` at the same time as flash is running code would cause a crash.
+
+`flash_safe_execute` disables interrupts and tries to cooperate with the other core to ensure flash is not in use
+See the documentation for `flash_safe_execute` and its assumptions and limitations
+*/
+
+/*!
+This function is called via the `flash_safe_execute()` wrapper function
+*/
+void FlashKLV::call_flash_range_erase(void* param)
+{
+    const erase_params_t* params = reinterpret_cast<erase_params_t*>(param); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+#if defined(FRAMEWORK_RPI_PICO)
+    flash_range_erase(reinterpret_cast<uint32_t>(params->address) - XIP_BASE, params->count);
+#elif defined(FRAMEWORK_TEST)
+    memset(params->address, 0xFF, params->count);
+#else
+    (void)params;
+#endif
+}
+
+/*!
+Erase a flash sector, disabling interrupts if required.
+*/
+int32_t FlashKLV::eraseSector(size_t sector, uint8_t* flashBankMemoryPtr) // NOLINT(readability-non-const-parameter)
+{
+    if (flashBankMemoryPtr == nullptr) {
+        return ERROR_INVALID_FLASH_BANK_PTR;
+    }
+
+    bool alreadyErased = true;
+    enum { BYTE_ERASED = 0xFF };
+    for (size_t ii = 0; ii < SECTOR_SIZE; ++ii) {
+        if (*(flashBankMemoryPtr + sector*SECTOR_SIZE + ii) != BYTE_ERASED) { // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+            alreadyErased = false;
+        }
+    }
+    if (alreadyErased) {
+        return OK_SECTOR_ALREADY_ERASED;
+    }
+#if defined(FRAMEWORK_ARDUINO_RPI_PICO)
+#if defined(FRAMEWORK_USE_FREERTOS)
+    taskENTER_CRITICAL(&_spinlock); // taskENTER_CRITICAL disables interrupts. This also means context switches are prevented.
+    flash_range_erase(reinterpret_cast<uint32_t>(&flashBankMemoryPtr[SECTOR_SIZE * sector]) - XIP_BASE, SECTOR_SIZE);
+    taskEXIT_CRITICAL(&_spinlock);
+#else
+    const uint32_t interrupts = save_and_disable_interrupts();
+    flash_range_erase(reinterpret_cast<uint32_t>(&flashBankMemoryPtr[SECTOR_SIZE * sector]) - XIP_BASE, SECTOR_SIZE);
+    restore_interrupts (interrupts);
+#endif
+#elif defined(FRAMEWORK_RPI_PICO)
+#if defined(FRAMEWORK_USE_FREERTOS)
+    taskENTER_CRITICAL(&_spinlock); // taskENTER_CRITICAL disables interrupts. This also means context switches are prevented.
+    flash_range_erase(reinterpret_cast<uint32_t>(&flashBankMemoryPtr[SECTOR_SIZE * sector]) - XIP_BASE, SECTOR_SIZE);
+    taskEXIT_CRITICAL(&_spinlock);
+#else
+    erase_params_t params = { .address = &flashBankMemoryPtr[SECTOR_SIZE * sector], .count = SECTOR_SIZE }; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic,misc-const-correctness)
+    const int err = flash_safe_execute(call_flash_range_erase, &params, UINT32_MAX);
+    hard_assert(err == PICO_OK);
+#endif
+#elif defined(FRAMEWORK_TEST)
+    erase_params_t params = { .address = &flashBankMemoryPtr[SECTOR_SIZE * sector], .count = SECTOR_SIZE }; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic,misc-const-correctness)
+    flash_safe_execute(call_flash_range_erase, &params, UINT32_MAX);
+#else
+    assert(false && "FRAMEWORK not supported");
+#endif // FRAMEWORK
+    return OK;
+}
+
+/*!
+This function is called via the `flash_safe_execute()` wrapper function
+*/
+void FlashKLV::call_flash_range_program(void* param)
+{
+    const program_params_t* params = reinterpret_cast<program_params_t*>(param); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+#if defined(FRAMEWORK_RPI_PICO)
+    flash_range_program(reinterpret_cast<uint32_t>(params->address) - XIP_BASE, params->data, PAGE_SIZE); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+#elif defined(FRAMEWORK_TEST)
+    memcpy(params->address, params->data, PAGE_SIZE);
+#else
+    (void)params;
+#endif
+}
+
+/*!
+Write a flash page, disabling interrupts if required.
+*/
+void FlashKLV::flashWritePage(size_t pageIndex, uint8_t* flashMemoryPtr) // NOLINT(readability-convert-member-functions-to-static)
+{
+#if defined(FRAMEWORK_ARDUINO_RPI_PICO)
+#if defined(FRAMEWORK_USE_FREERTOS)
+    taskENTER_CRITICAL(&_spinlock); // taskENTER_CRITICAL disables interrupts. This also means context switches are prevented.
+    flash_range_program(reinterpret_cast<uint32_t>(&flashMemoryPtr[pageIndex*PAGE_SIZE]) - XIP_BASE, &_pageCache[0], FLASH_PAGE_SIZE);
+    taskEXIT_CRITICAL(&_spinlock);
+#else
+    const uint32_t interrupts = save_and_disable_interrupts();
+    flash_range_program(reinterpret_cast<uint32_t>(&flashMemoryPtr[pageIndex*PAGE_SIZE]) - XIP_BASE, &_pageCache[0], FLASH_PAGE_SIZE);
+    restore_interrupts (interrupts);
+#endif
+#elif defined(FRAMEWORK_RPI_PICO)
+#if defined(FRAMEWORK_USE_FREERTOS)
+    taskENTER_CRITICAL(&_spinlock); // taskENTER_CRITICAL disables interrupts. This also means context switches are prevented.
+    flash_range_program(reinterpret_cast<uint32_t>(&flashMemoryPtr[pageIndex*PAGE_SIZE]) - XIP_BASE, &_pageCache[0], FLASH_PAGE_SIZE);
+    taskEXIT_CRITICAL(&_spinlock);
+#else
+    program_params_t params = { .address = &flashMemoryPtr[pageIndex*PAGE_SIZE], .data = &_pageCache[0] };
+    const int err = flash_safe_execute(call_flash_range_program, &params, UINT32_MAX);
+    hard_assert(err == PICO_OK);
+#endif
+#elif defined(FRAMEWORK_TEST)
+    program_params_t params = { .address = &flashMemoryPtr[pageIndex*PAGE_SIZE], .data = &_pageCache[0] };
+    flash_safe_execute(call_flash_range_program, &params, UINT32_MAX);
+#else
+    assert(false && "FRAMEWORK not supported");
+#endif
 }
