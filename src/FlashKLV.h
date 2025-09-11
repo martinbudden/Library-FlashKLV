@@ -22,7 +22,8 @@ public:
         ERROR_FLASH_FULL = -1, ERROR_NOT_FOUND = -2, ERROR_INVALID_KEY = -3,
         ERROR_RECORD_TOO_LARGE = -4, ERROR_RECORD_TOO_SMALL = -5,
         ERROR_OTHER_BANK_NOT_INITIALIZED = -6, ERROR_OTHER_BANK_NOT_ERASED = -7,
-        ERROR_INVALID_FLASH_BANK_PTR = -8
+        ERROR_INVALID_FLASH_BANK_PTR = -8,
+        ERROR_NO_FREE_FLASH = UINT32_MAX
     };
     enum { NOT_FOUND = 0 };
     enum { RECORD_KEY_EMPTY = 0xFFFF, RECORD_KEY_BANK_HEADER = 0x3FFE, RECORD_KEY_DELETED = 0, RECORD_EMPTY = 0xFF };
@@ -75,6 +76,7 @@ public:
 
     klv_t find(uint16_t key) const;
     klv_t findNext(size_t pos) const;
+    size_t findFirstFreePos() const;
     int32_t copyRecordsToOtherBankAndSwapBanks();
     int32_t read(void* value, size_t size,  uint16_t key) const;
 

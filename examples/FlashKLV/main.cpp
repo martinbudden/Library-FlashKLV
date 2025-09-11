@@ -7,10 +7,11 @@
 #include <hardware/flash.h>
 #include <hardware/sync.h>
 
+// create a FlashKLV object
 enum { SECTOR_COUNT = 4 };
 static FlashKLV flashKLV(SECTOR_COUNT);
 
-enum { CONFIG_KEY = 0x01 };
+enum { CONFIG_KEY_A = 0x0A };
 enum { CONFIG_KEY_B = 0x0B };
 struct config_t {
     uint16_t a;
@@ -42,9 +43,9 @@ void setup()
 {
     //stdio_init_all();
     Serial.begin(115200);
-    while(!Serial);
-    delay(1000);
-    // create a FlashKLV object
+    while(!Serial); // wait for Serial to initialize
+
+    delay(200);
 
     Serial.println("FlashPtr: 0x" + String(reinterpret_cast<uint32_t>(flashKLV.getCurrentBankMemoryPtr()), HEX));
     Serial.println("FlashPtr-XIP: 0x" + String(reinterpret_cast<uint32_t>(flashKLV.getCurrentBankMemoryPtr()) - XIP_BASE, HEX));
@@ -53,37 +54,51 @@ void setup()
 
     Serial.println("FlashSize: 0x" + String(PICO_FLASH_SIZE_BYTES, HEX));
 
-    // flashKLV.eraseSector(0);
-    printBuf(flashKLV.getCurrentBankMemoryPtr(), 36);
+    flashKLV.eraseSector(0);
 
-    delay(100);
-    Serial.println("****WRITE****");
-    const config_t configW = { .a = 0x0AFF, .b =0x12, .c = 0x35 };
-    int32_t err = flashKLV.write(CONFIG_KEY, sizeof(configW), &configW);
-    Serial.println("write err = " + String(err, DEC));
-    printBuf(flashKLV.getCurrentBankMemoryPtr(), 36);
+    enum { MEMORY_DISPLAY_SIZE = 36 };
+    printBuf(flashKLV.getCurrentBankMemoryPtr(), MEMORY_DISPLAY_SIZE);
 
-    delay(100);
-    Serial.println("****WRITE****");
-    const config_t configW2 = { .a = 0xFF00, .b =0x88, .c = 0x99 };
-    err = flashKLV.write(CONFIG_KEY, sizeof(configW2), &configW2);
-    Serial.println("write err = " + String(err, DEC));
-    printBuf(flashKLV.getCurrentBankMemoryPtr(), 36);
+    // stop writing
+    if (flashKLV.findFirstFreePos() < 24) {
+        const config_t configA1 = { .a = 0xAAAA, .b =0xBB, .c = 0xCC };
+        const config_t configA2 = { .a = 0xCCCC, .b =0xDD, .c = 0xEE };
+        const config_t configB  = { .a = 0x1111, .b =0x22, .c = 0x33 };
 
-    delay(100);
-    Serial.println("****WRITE****");
-    const config_t configWB = { .a = 0x1111, .b =0x22, .c = 0x33 };
-    err = flashKLV.write(CONFIG_KEY_B, sizeof(configWB), &configWB);
-    Serial.println("write err = " + String(err, DEC));
-    printBuf(flashKLV.getCurrentBankMemoryPtr(), 36);
+        delay(100);
+        Serial.println("****WRITE****");
+        int32_t err = flashKLV.write(CONFIG_KEY_A, sizeof(configA1), &configA1);
+        Serial.println("write err = " + String(err, DEC));
+        printBuf(flashKLV.getCurrentBankMemoryPtr(), MEMORY_DISPLAY_SIZE);
+
+        delay(100);
+        // write configA2, overwriting config A1
+        Serial.println("****WRITE****");
+        err = flashKLV.write(CONFIG_KEY_A, sizeof(configA2), &configA2);
+        Serial.println("write err = " + String(err, DEC));
+        printBuf(flashKLV.getCurrentBankMemoryPtr(), MEMORY_DISPLAY_SIZE);
+
+        delay(100);
+        Serial.println("****WRITE****");
+        err = flashKLV.write(CONFIG_KEY_B, sizeof(configB), &configB);
+        Serial.println("write err = " + String(err, DEC));
+        printBuf(flashKLV.getCurrentBankMemoryPtr(), MEMORY_DISPLAY_SIZE);
+
+        delay(100);
+        // write configA1, overwriting config A2
+        Serial.println("****WRITE****");
+        err = flashKLV.write(CONFIG_KEY_A, sizeof(configA1), &configA1);
+        Serial.println("write err = " + String(err, DEC));
+        printBuf(flashKLV.getCurrentBankMemoryPtr(), MEMORY_DISPLAY_SIZE);
+    }
 
     delay(100);
     // read a config structure
     config_t configR {};
     Serial.println("****READ****");
-    err = flashKLV.read(&configR, sizeof(configR), CONFIG_KEY);
+    int32_t err = flashKLV.read(&configR, sizeof(configR), CONFIG_KEY_A);
     Serial.println("read err = " + String(err, DEC));
-    Serial.println("record(0x0" + String(CONFIG_KEY, HEX) + ") " + String(configR.a, HEX) + " "+ String(configR.b, HEX) + " " + String(configR.c, HEX));
+    Serial.println("record(0x0" + String(CONFIG_KEY_A, HEX) + ") " + String(configR.a, HEX) + " "+ String(configR.b, HEX) + " " + String(configR.c, HEX));
 
     Serial.println();
     Serial.println("****READ****");

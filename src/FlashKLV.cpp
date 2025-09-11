@@ -169,18 +169,25 @@ bool FlashKLV::isEmpty(uint16_t flashRecordKey)
     return flashRecordKey == RECORD_KEY_EMPTY;
 }
 
-size_t FlashKLV::bytesFree() const
+size_t FlashKLV::findFirstFreePos() const
 {
     size_t pos = 0;
     uint16_t flashRecordKey = getRecordKey(pos);
     while (!isEmpty(flashRecordKey)) {
         pos += getRecordPositionIncrement(pos);
         if (pos >= _bankMemorySize) {
-            return 0;
+            return ERROR_NO_FREE_FLASH;
         }
         flashRecordKey = getRecordKey(pos);
     }
-    return _bankMemorySize - pos;
+
+    return pos;
+}
+
+size_t FlashKLV::bytesFree() const
+{
+    const size_t firstFreePos = findFirstFreePos();
+    return (firstFreePos == ERROR_NO_FREE_FLASH) ?  0 : _bankMemorySize - firstFreePos;
 }
 
 /*!
