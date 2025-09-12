@@ -195,8 +195,8 @@ After doing this and writing the new record the first 16 bytes of flash will be:
 
 ## Further reading
 
-[https://www.makermatrix.com/blog/read-and-write-data-with-the-pi-pico-onboard-flash/](Read and write data with the Pi Pico onboard flash)
+[Read and write data with the Pi Pico onboard flash](https://www.makermatrix.com/blog/read-and-write-data-with-the-pi-pico-onboard-flash/)
 
-[https://arduino-pico.readthedocs.io/en/latest/eeprom.html](EEPROM Library)
+[EEPROM Library](https://arduino-pico.readthedocs.io/en/latest/eeprom.html)
 
-[https://github.com/littlefs-project/littlefs](A little fail-safe filesystem designed for microcontrollers)
+[A little fail-safe filesystem designed for microcontrollers](https://github.com/littlefs-project/littlefs)
