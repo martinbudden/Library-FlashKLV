@@ -7,6 +7,12 @@
 #include <hardware/flash.h>
 #include <hardware/sync.h>
 
+extern char __flash_binary_start;  // defined in linker script
+extern char __flash_binary_end;    // defined in linker script
+const uintptr_t codeStart = (uintptr_t) &__flash_binary_start;
+const uintptr_t codeEnd = (uintptr_t) &__flash_binary_end;
+const uintptr_t codeSize = codeEnd - codeStart;
+
 // create a FlashKLV object
 enum { SECTOR_COUNT = 4 };
 static FlashKLV flashKLV(SECTOR_COUNT);
@@ -46,6 +52,16 @@ void setup()
     while(!Serial); // wait for Serial to initialize
 
     delay(200);
+    
+    Serial.println();
+    Serial.println("Code start: 0x" + String(codeStart, HEX));
+    Serial.println("Code end:   0x" + String(codeEnd, HEX));
+    Serial.println("Code size:  0x" + String(codeSize, HEX) + "("+String(codeSize, DEC) + ")");
+    Serial.println();
+
+    const uint32_t sectorsAvailable = (PICO_FLASH_SIZE_BYTES - codeSize) / FLASH_SECTOR_SIZE;
+    Serial.println("Number of sectors available for FlashKLV: 0x" + String(sectorsAvailable, HEX) + "("+String(sectorsAvailable, DEC) + ")");
+    Serial.println();
 
     Serial.println("FlashPtr: 0x" + String(reinterpret_cast<uint32_t>(flashKLV.getCurrentBankMemoryPtr()), HEX));
     Serial.println("FlashPtr-XIP: 0x" + String(reinterpret_cast<uint32_t>(flashKLV.getCurrentBankMemoryPtr()) - XIP_BASE, HEX));
@@ -109,4 +125,5 @@ void setup()
 
 void loop()
 {
+    delay(100);
 }
