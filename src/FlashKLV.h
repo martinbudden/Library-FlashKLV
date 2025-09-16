@@ -4,10 +4,6 @@
 #include <cstddef>
 #include <cstdint>
 
-#if defined(FRAMEWORK_USE_FREERTOS)
-#include <freertos/FreeRTOS.h>
-#endif
-
 
 /*!
 Flash Key Length Value (KLV) storage.
@@ -146,7 +142,4 @@ protected:
     size_t _bankSectorCount; //!< the number of sectors in each memory bank
     std::array<uint8_t, PAGE_SIZE> _pageCache {};
     static constexpr std::array<uint8_t, 8> BANK_HEADER =  { 0xFF, 0xFE, 0x04, 0x00, 0xF1, 0xF2, 0xF3, 0xF4 };
-#if defined(FRAMEWORK_USE_FREERTOS)
-    mutable portMUX_TYPE _spinlock = portMUX_INITIALIZER_UNLOCKED;
-#endif
 };

@@ -3,6 +3,16 @@
 #include <cstring>
 
 
+#if defined(FRAMEWORK_USE_FREERTOS) || defined(PIO_FRAMEWORK_ARDUINO_ENABLE_FREERTOS)
+#if defined(FRAMEWORK_USE_FREERTOS_SUBDIRECTORY)
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#else
+#include <FreeRTOS.h>
+#include <task.h>
+#endif
+#endif
+
 #if defined(FRAMEWORK_RPI_PICO)
 
 #elif defined(FRAMEWORK_ESPIDF)
@@ -549,23 +559,24 @@ void FlashKLV::flashDeleteAndWrite(size_t deletePos, size_t pos, uint16_t key, u
     const auto* keyLengthPtr = ((key&KL16_BIT) == 0) ? reinterpret_cast<const uint8_t*>(&keyLength8) : reinterpret_cast<const uint8_t*>(&keyLength16); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
     const size_t sizeofKeyLength = ((key&KL16_BIT) == 0) ? sizeof(kl8_t) : sizeof(kl16_t);
 
-    // update the pageCache with key and value, dealing with the case where key and value can span two pages
+    // update the pageCache with key and length, dealing with the case where key and length span two pages
     if (sizeofKeyLength >= bytesToEndOfPage) {
-        // key and value fill this page
+        // key and length fill this page
         // so copy up to the end of this page
         memcpy(&_pageCache[pageOffset], keyLengthPtr, bytesToEndOfPage);
         flashWritePage(pageIndex++, flashMemoryPtr);
         flashReadPage(pageIndex, flashMemoryPtr);
         if (sizeofKeyLength > bytesToEndOfPage) {
-            // key and value spill onto next page
+            // key and length spill onto next page
             // so copy the rest onto the next page
             memcpy(&_pageCache[0], keyLengthPtr + bytesToEndOfPage, sizeofKeyLength - bytesToEndOfPage);
         }
     } else {
-        // key and value are contained within this page
+        // key and length are contained within this page
         memcpy(&_pageCache[pageOffset], keyLengthPtr, sizeofKeyLength);
     }
 
+    // now deal with the value
     pos += sizeofKeyLength;
     pageOffset = pos - pageIndex*PAGE_SIZE;
     bytesToEndOfPage = PAGE_SIZE - pageOffset;
@@ -611,7 +622,8 @@ void FlashKLV::call_flash_range_erase(void* param)
 #if defined(FRAMEWORK_RPI_PICO)
     flash_range_erase(reinterpret_cast<uint32_t>(params->address) - XIP_BASE, params->count);
 #elif defined(FRAMEWORK_TEST)
-    memset(params->address, 0xFF, params->count);
+    enum { BYTE_ERASED = 0xFF };
+    memset(params->address, BYTE_ERASED, params->count);
 #else
     (void)params;
 #endif
@@ -631,36 +643,46 @@ int32_t FlashKLV::eraseSector(size_t sector, uint8_t* flashBankMemoryPtr) // NOL
     for (size_t ii = 0; ii < SECTOR_SIZE; ++ii) {
         if (*(flashBankMemoryPtr + sector*SECTOR_SIZE + ii) != BYTE_ERASED) { // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
             alreadyErased = false;
+            break;
         }
     }
     if (alreadyErased) {
         return OK_SECTOR_ALREADY_ERASED;
     }
+
 #if defined(FRAMEWORK_ARDUINO_RPI_PICO)
-#if defined(FRAMEWORK_USE_FREERTOS)
-    taskENTER_CRITICAL(&_spinlock); // taskENTER_CRITICAL disables interrupts. This also means context switches are prevented.
+
+#if defined(FRAMEWORK_USE_FREERTOS) || defined(PIO_FRAMEWORK_ARDUINO_ENABLE_FREERTOS)
+    taskENTER_CRITICAL(); // taskENTER_CRITICAL disables interrupts. This also means context switches are prevented.
     flash_range_erase(reinterpret_cast<uint32_t>(&flashBankMemoryPtr[SECTOR_SIZE * sector]) - XIP_BASE, SECTOR_SIZE);
-    taskEXIT_CRITICAL(&_spinlock);
+    taskEXIT_CRITICAL();
 #else
     const uint32_t interrupts = save_and_disable_interrupts();
     flash_range_erase(reinterpret_cast<uint32_t>(&flashBankMemoryPtr[SECTOR_SIZE * sector]) - XIP_BASE, SECTOR_SIZE);
-    restore_interrupts (interrupts);
+    restore_interrupts(interrupts);
 #endif
+
 #elif defined(FRAMEWORK_RPI_PICO)
+
 #if defined(FRAMEWORK_USE_FREERTOS)
-    taskENTER_CRITICAL(&_spinlock); // taskENTER_CRITICAL disables interrupts. This also means context switches are prevented.
+    taskENTER_CRITICAL(); // taskENTER_CRITICAL disables interrupts. This also means context switches are prevented.
     flash_range_erase(reinterpret_cast<uint32_t>(&flashBankMemoryPtr[SECTOR_SIZE * sector]) - XIP_BASE, SECTOR_SIZE);
-    taskEXIT_CRITICAL(&_spinlock);
+    taskEXIT_CRITICAL();
 #else
     erase_params_t params = { .address = &flashBankMemoryPtr[SECTOR_SIZE * sector], .count = SECTOR_SIZE }; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic,misc-const-correctness)
     const int err = flash_safe_execute(call_flash_range_erase, &params, UINT32_MAX);
     hard_assert(err == PICO_OK);
 #endif
+
 #elif defined(FRAMEWORK_TEST)
+
     erase_params_t params = { .address = &flashBankMemoryPtr[SECTOR_SIZE * sector], .count = SECTOR_SIZE }; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic,misc-const-correctness)
     flash_safe_execute(call_flash_range_erase, &params, UINT32_MAX);
+
 #else
-    assert(false && "FRAMEWORK not supported");
+
+    // FRAMEWORK not supported
+
 #endif // FRAMEWORK
     return OK;
 }
@@ -677,7 +699,7 @@ void FlashKLV::call_flash_range_program(void* param)
     memcpy(params->address, params->data, PAGE_SIZE);
 #else
     (void)params;
-#endif
+#endif // FRAMEWORK
 }
 
 /*!
@@ -686,29 +708,37 @@ Write a flash page, disabling interrupts if required.
 void FlashKLV::flashWritePage(size_t pageIndex, uint8_t* flashMemoryPtr) // NOLINT(readability-convert-member-functions-to-static)
 {
 #if defined(FRAMEWORK_ARDUINO_RPI_PICO)
-#if defined(FRAMEWORK_USE_FREERTOS)
-    taskENTER_CRITICAL(&_spinlock); // taskENTER_CRITICAL disables interrupts. This also means context switches are prevented.
+
+#if defined(FRAMEWORK_USE_FREERTOS) || defined(PIO_FRAMEWORK_ARDUINO_ENABLE_FREERTOS)
+    taskENTER_CRITICAL(); // taskENTER_CRITICAL disables interrupts. This also means context switches are prevented.
     flash_range_program(reinterpret_cast<uint32_t>(&flashMemoryPtr[pageIndex*PAGE_SIZE]) - XIP_BASE, &_pageCache[0], FLASH_PAGE_SIZE);
-    taskEXIT_CRITICAL(&_spinlock);
+    taskEXIT_CRITICAL();
 #else
     const uint32_t interrupts = save_and_disable_interrupts();
     flash_range_program(reinterpret_cast<uint32_t>(&flashMemoryPtr[pageIndex*PAGE_SIZE]) - XIP_BASE, &_pageCache[0], FLASH_PAGE_SIZE);
-    restore_interrupts (interrupts);
+    restore_interrupts(interrupts);
 #endif
+
 #elif defined(FRAMEWORK_RPI_PICO)
+
 #if defined(FRAMEWORK_USE_FREERTOS)
-    taskENTER_CRITICAL(&_spinlock); // taskENTER_CRITICAL disables interrupts. This also means context switches are prevented.
+    taskENTER_CRITICAL(); // taskENTER_CRITICAL disables interrupts. This also means context switches are prevented.
     flash_range_program(reinterpret_cast<uint32_t>(&flashMemoryPtr[pageIndex*PAGE_SIZE]) - XIP_BASE, &_pageCache[0], FLASH_PAGE_SIZE);
-    taskEXIT_CRITICAL(&_spinlock);
+    taskEXIT_CRITICAL();
 #else
     program_params_t params = { .address = &flashMemoryPtr[pageIndex*PAGE_SIZE], .data = &_pageCache[0] };
     const int err = flash_safe_execute(call_flash_range_program, &params, UINT32_MAX);
     hard_assert(err == PICO_OK);
 #endif
+
 #elif defined(FRAMEWORK_TEST)
+
     program_params_t params = { .address = &flashMemoryPtr[pageIndex*PAGE_SIZE], .data = &_pageCache[0] };
     flash_safe_execute(call_flash_range_program, &params, UINT32_MAX);
+
 #else
-    assert(false && "FRAMEWORK not supported");
-#endif
+
+    //FRAMEWORK not supported
+
+#endif // FRAMEWORK
 }
