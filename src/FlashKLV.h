@@ -13,6 +13,7 @@ Currently only implemented on Raspberry Pi Pico platform.
 class FlashKLV {
 public:
     enum { ONE_BANK = 1, TWO_BANKS = 2 };
+    enum { OVERWRITE_RECORDS = 0x01, DELETE_RECORDS = 0x02, USE_CRC = 0x04 };
     enum {
         OK = 0, OK_NO_NEED_TO_WRITE = 1, OK_OVERWRITTEN = 2, OK_NOTHING_TO_COPY = 3, OK_SECTOR_ALREADY_ERASED = 4, OK_NO_RECORDS_COPIED = 5,
         ERROR_FLASH_FULL = -1, ERROR_NOT_FOUND = -2, ERROR_INVALID_KEY = -3,
@@ -69,6 +70,9 @@ public:
     explicit FlashKLV(size_t sectorsPerBank);
     ~FlashKLV() = default;
 public:
+    static uint8_t calculateCRC(uint8_t crc, uint8_t value);
+    static uint8_t calculateCRC(uint8_t crc, const uint8_t *data, size_t length);
+
     static bool keyOK(uint16_t key) { return ((key >= KEY8_MIN && key <= KEY8_MAX) || (key >= KEY16_MIN && key <= KEY16_MAX)); }
 
     size_t bytesFree() const;
@@ -88,11 +92,15 @@ public:
 
     bool isCurrentBankErased() const  { return isBankErased(_currentBankMemoryPtr); }
     bool isOtherBankErased() const  { return isBankErased(_otherBankMemoryPtr); }
-    int32_t  eraseCurrentBank() { return eraseBank(_currentBankMemoryPtr); }
-    int32_t  eraseOtherBank() { return eraseBank(_otherBankMemoryPtr); }
+    int32_t eraseCurrentBank() { return eraseBank(_currentBankMemoryPtr); }
+    int32_t eraseOtherBank() { return eraseBank(_otherBankMemoryPtr); }
     size_t getBankSectorCount() const { return _bankSectorCount; }
     bool isSectorErasedCurrentBank(size_t sector) const  { return isSectorErased(sector, _currentBankMemoryPtr); }
     bool isSectorErasedOtherBank(size_t sector) const  { return isSectorErased(sector, _otherBankMemoryPtr); }
+
+    bool overwriteRecords() const { return _mode & OVERWRITE_RECORDS; }
+    bool deleteRecords() const { return _mode & DELETE_RECORDS; }
+    bool useCRC() const { return _mode & USE_CRC; }
 protected:
     static bool isSectorErased(size_t sector, const uint8_t* flashBankMemoryPtr);
     bool isBankErased(const uint8_t* flashBankMemoryPtr) const;
@@ -140,6 +148,7 @@ protected:
     uint8_t* _otherBankMemoryPtr {};
     size_t _bankMemorySize; //!< the size of each memory bank
     size_t _bankSectorCount; //!< the number of sectors in each memory bank
+    uint32_t _mode {OVERWRITE_RECORDS | DELETE_RECORDS};
     std::array<uint8_t, PAGE_SIZE> _pageCache {};
     static constexpr std::array<uint8_t, 8> BANK_HEADER =  { 0xFF, 0xFE, 0x04, 0x00, 0xF1, 0xF2, 0xF3, 0xF4 };
 };

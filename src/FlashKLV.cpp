@@ -4,10 +4,13 @@
 
 
 #if defined(FRAMEWORK_USE_FREERTOS) || defined(PIO_FRAMEWORK_ARDUINO_ENABLE_FREERTOS)
-#if defined(FRAMEWORK_USE_FREERTOS_SUBDIRECTORY)
+#if defined(FRAMEWORK_ESPIDF) || defined(FRAMEWORK_ARDUINO_ESP32)
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #else
+#if defined(FRAMEWORK_ARDUINO_STM32)
+#include <STM32FreeRTOS.h>
+#endif
 #include <FreeRTOS.h>
 #include <task.h>
 #endif
@@ -16,6 +19,8 @@
 #if defined(FRAMEWORK_RPI_PICO)
 
 #elif defined(FRAMEWORK_ESPIDF)
+
+#elif defined(FRAMEWORK_STM32_CUBE)
 
 #elif defined(FRAMEWORK_TEST)
 
@@ -41,7 +46,7 @@ int flash_safe_execute(void (*fn)(void*), void* param, uint32_t timeout_ms) { (v
 
 
 /*!
-If bankCount == 1 then we have one bank of flash at 
+If bankCount == 1 then we have one bank of flash at
 address: flashMemoryPtr, size: SECTOR_SIZE*sectorsPerBank
 
 If bankCount == 2 then we have
@@ -92,6 +97,32 @@ FlashKLV::FlashKLV(uint8_t* flashMemoryPtr, size_t sectorsPerBank) :
 
 FlashKLV::FlashKLV(size_t sectorsPerBank) :
     FlashKLV(sectorsPerBank, ONE_BANK) {}
+
+
+uint8_t FlashKLV::calculateCRC(uint8_t crc, uint8_t value)
+{
+    static constexpr uint8_t POLYNOMIAL = 0xD5;
+
+    crc ^= value;
+    for (int ii = 0; ii < 8; ++ii) { // NOLINT(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
+        crc <<= 1U;
+        if ((crc & 0x80U) != 0) { // NOLINT(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
+            crc ^= POLYNOMIAL;
+        }
+    }
+    return crc;
+}
+
+uint8_t FlashKLV::calculateCRC(uint8_t crc, const uint8_t *data, size_t length)
+{
+    const uint8_t* end = data + length; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+    for (; data != end; ++data) { // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+        crc = calculateCRC(crc, *data);
+    }
+    return crc;
+}
+
+
 
 /*!
 Flash can be overwritten if bits are only flipped from 1 to 0, never from 0 to 1
@@ -232,8 +263,9 @@ Find always searches the current bank.
 */
 FlashKLV::klv_t FlashKLV::find(uint16_t key) const
 {
+    klv_t klv = {.key = NOT_FOUND, .length = 0, .valuePtr = nullptr};
     if (!keyOK(key)) {
-        return klv_t {.key = NOT_FOUND, .length = 0, .valuePtr = nullptr};
+        return klv;
     }
 
     // Walk the flash until skipping over deleted records and records with a different key.
@@ -241,15 +273,20 @@ FlashKLV::klv_t FlashKLV::find(uint16_t key) const
     uint16_t flashRecordKey = getRecordKey(pos);
     while (!isEmpty(flashRecordKey)) {
         if (flashRecordKey == key) {
-            return klv_t {.key = key, .length = getRecordLength(pos), .valuePtr = getRecordValuePtr(pos)};
+            klv = {.key = key, .length = getRecordLength(pos), .valuePtr = getRecordValuePtr(pos)};
+            if (deleteRecords()) {
+                // if records are deleted, then there will be only one record with the given key
+                return klv;
+            }
+            // records are not deleted, so continue searching to see if there is another record with this key
         }
         pos += getRecordPositionIncrement(pos);
         if (pos >= _bankMemorySize) {
-            return klv_t {.key = NOT_FOUND, .length = 0, .valuePtr = nullptr};
+            return klv;
         }
         flashRecordKey = getRecordKey(pos);
     }
-    return klv_t {.key = NOT_FOUND, .length = 0, .valuePtr = nullptr};
+    return klv;
 }
 
 /*!
@@ -410,7 +447,7 @@ int32_t FlashKLV::write(uint16_t key, uint16_t length, const uint8_t* valuePtr, 
                     return OK_NO_NEED_TO_WRITE;
                 }
                 // record has changed, so check if it can the be overwritten, that is bits are only flipped from 1 to 0, never from 0 to 1
-                if (overwriteable(getRecordValuePtr(pos), valuePtr, length)) {
+                if (overwriteRecords() && overwriteable(getRecordValuePtr(pos), valuePtr, length)) {
                     // just overwrite the value: key and length are unchanged
                     flashWrite(pos + (((flashMemoryPtr[pos] & KL16_BIT) == 0) ? sizeof(kl8_t) : sizeof(kl16_t)), length, valuePtr, flashMemoryPtr); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
                     return OK_OVERWRITTEN;
@@ -532,7 +569,7 @@ void FlashKLV::flashDeleteAndWrite(size_t deletePos, size_t pos, uint16_t key, u
 {
     size_t pageIndex = pos / PAGE_SIZE;
 
-    const size_t deletePageIndex = (deletePos == NO_DELETE) ? NO_DELETE : deletePos / PAGE_SIZE;
+    const size_t deletePageIndex = ((deletePos == NO_DELETE) || !deleteRecords()) ? NO_DELETE : deletePos / PAGE_SIZE;
     if (deletePos != NO_DELETE && deletePageIndex != pageIndex) {
         // there is a record to mark as deleted, and it is in a different page than the record being written
         flashMarkRecordAsDeleted(deletePos, flashMemoryPtr);

@@ -52,7 +52,7 @@ void setup()
     while(!Serial); // wait for Serial to initialize
 
     delay(200);
-    
+
     Serial.println();
     Serial.println("Code start: 0x" + String(codeStart, HEX));
     Serial.println("Code end:   0x" + String(codeEnd, HEX));
