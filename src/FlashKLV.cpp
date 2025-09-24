@@ -105,8 +105,9 @@ uint8_t FlashKLV::calculateCRC(uint8_t crc, uint8_t value)
 
     crc ^= value;
     for (int ii = 0; ii < 8; ++ii) { // NOLINT(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
+        const uint8_t topBit = crc & 0x80U; // NOLINT(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
         crc <<= 1U;
-        if ((crc & 0x80U) != 0) { // NOLINT(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
+        if (topBit) {
             crc ^= POLYNOMIAL;
         }
     }
@@ -115,8 +116,7 @@ uint8_t FlashKLV::calculateCRC(uint8_t crc, uint8_t value)
 
 uint8_t FlashKLV::calculateCRC(uint8_t crc, const uint8_t *data, size_t length)
 {
-    const uint8_t* end = data + length; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-    for (; data != end; ++data) { // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+    for (const uint8_t* end = data + length; data != end; ++data) { // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
         crc = calculateCRC(crc, *data);
     }
     return crc;
