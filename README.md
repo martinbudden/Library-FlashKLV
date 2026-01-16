@@ -8,18 +8,24 @@ It can be used to save data like API keys, configuration data, network credentia
 
 Data is stored in Key Length Value format, using either 8-bit keys or 16-bit keys, as follows:
 
-| Key                       | Storage | Max length of value |
-| ------------------------- | ------- | ------------------- |
-| 1-63 (0x01-0x3F)          | 8-bit   | 255 bytes           |
-| 256-16361 (0x0100-0x3FFD) | 16-bit  | 65535 bytes         |
+| Key                        | Storage | Max length of value |
+| -------------------------- | ------- | ------------------- |
+| 0x01-0x3F (1-63)           | 8-bit   | 255 bytes           |
+| 0x0100-0x1FFF (256-8191)   | 16-bit  | 255 bytes           |
+| 0x2000-0x3FFD (8192-16361) | 16-bit  | 65535 bytes         |
 
 Other keys are invalid and may not be used. In particular keys of 0, 64-255, and > 16361 are invalid.
 
 This gives a total of 16,169 usable keys.
 
-For keys 1 to 63, the key and the length are stored as 8-bit values and so there is an overhead of 2 bytes per record stored.
+Keys 0x01-0x3F (1-63): the key and the length are stored as 8-bit values and so there is an
+overhead of 2 bytes per record stored.
 
-For keys 256 to 16363, the key and the length are stored as 16-bit values and so there is an overhead of 4 bytes per record stored.
+Keys 0x0100-0x1FFF (256-8191): the key is stored as a 16-bit value and the length is stored as a 8-bit value and so there is an
+overhead of 3 bytes per record stored.
+
+Keys 0x2000-0x3FFD (8192-16361): the key and the length are stored as 16-bit values and so there is an
+overhead of 4 bytes per record stored.
 
 ### How much memory should I allocate for FlashTLV?
 
