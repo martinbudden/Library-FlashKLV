@@ -63,8 +63,8 @@ void setup()
     Serial.println("Number of sectors available for FlashKlv: 0x" + String(sectorsAvailable, HEX) + "("+String(sectorsAvailable, DEC) + ")");
     Serial.println();
 
-    Serial.println("FlashPtr: 0x" + String(reinterpret_cast<uint32_t>(flashKLV.get_current_bankMemory_ptr()), HEX));
-    Serial.println("FlashPtr-XIP: 0x" + String(reinterpret_cast<uint32_t>(flashKLV.get_current_bankMemory_ptr()) - XIP_BASE, HEX));
+    Serial.println("FlashPtr: 0x" + String(reinterpret_cast<uint32_t>(flashKLV.get_current_bank_memory_slice()), HEX));
+    Serial.println("FlashPtr-XIP: 0x" + String(reinterpret_cast<uint32_t>(flashKLV.get_current_bank_memory_slice()) - XIP_BASE, HEX));
     Serial.println("Offset: 0x" + String(PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE*SECTOR_COUNT, HEX));
     Serial.println();
 
@@ -73,7 +73,7 @@ void setup()
     flashKLV.erase_sector(0);
 
     enum { MEMORY_DISPLAY_SIZE = 36 };
-    printBuf(flashKLV.get_current_bankMemory_ptr(), MEMORY_DISPLAY_SIZE);
+    printBuf(flashKLV.get_current_bank_memory_slice(), MEMORY_DISPLAY_SIZE);
 
     // stop writing
     if (flashKLV.find_first_free_pos() < 24) {
@@ -85,27 +85,27 @@ void setup()
         Serial.println("****WRITE****");
         int32_t err = flashKLV.write(CONFIG_KEY_A, sizeof(configA1), &configA1);
         Serial.println("write err = " + String(err, DEC));
-        printBuf(flashKLV.get_current_bankMemory_ptr(), MEMORY_DISPLAY_SIZE);
+        printBuf(flashKLV.get_current_bank_memory_slice(), MEMORY_DISPLAY_SIZE);
 
         delay(100);
         // write configA2, overwriting config A1
         Serial.println("****WRITE****");
         err = flashKLV.write(CONFIG_KEY_A, sizeof(configA2), &configA2);
         Serial.println("write err = " + String(err, DEC));
-        printBuf(flashKLV.get_current_bankMemory_ptr(), MEMORY_DISPLAY_SIZE);
+        printBuf(flashKLV.get_current_bank_memory_slice(), MEMORY_DISPLAY_SIZE);
 
         delay(100);
         Serial.println("****WRITE****");
         err = flashKLV.write(CONFIG_KEY_B, sizeof(configB), &configB);
         Serial.println("write err = " + String(err, DEC));
-        printBuf(flashKLV.get_current_bankMemory_ptr(), MEMORY_DISPLAY_SIZE);
+        printBuf(flashKLV.get_current_bank_memory_slice(), MEMORY_DISPLAY_SIZE);
 
         delay(100);
         // write configA1, overwriting config A2
         Serial.println("****WRITE****");
         err = flashKLV.write(CONFIG_KEY_A, sizeof(configA1), &configA1);
         Serial.println("write err = " + String(err, DEC));
-        printBuf(flashKLV.get_current_bankMemory_ptr(), MEMORY_DISPLAY_SIZE);
+        printBuf(flashKLV.get_current_bank_memory_slice(), MEMORY_DISPLAY_SIZE);
     }
 
     delay(100);

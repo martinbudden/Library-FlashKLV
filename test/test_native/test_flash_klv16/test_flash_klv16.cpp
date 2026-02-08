@@ -61,21 +61,21 @@ struct record23_t {
     std::array<uint8_t, LENGTH> value {};
 };
 
-void test_flash_overwriteable()
+void test_flash_is_byte_overwriteable()
 {
     const uint8_t f0 = 0b11111111;
     const uint8_t v0 = 0b00000000;
-    TEST_ASSERT_TRUE(FlashKlv::overwriteable(f0, v0));
-    TEST_ASSERT_FALSE(FlashKlv::overwriteable(v0, f0));
-    TEST_ASSERT_TRUE(FlashKlv::overwriteable(&f0, &v0, sizeof(f0)));
-    TEST_ASSERT_FALSE(FlashKlv::overwriteable(&v0, &f0, sizeof(f0)));
+    TEST_ASSERT_TRUE(FlashKlv::is_byte_overwriteable(f0, v0));
+    TEST_ASSERT_FALSE(FlashKlv::is_byte_overwriteable(v0, f0));
+    TEST_ASSERT_TRUE(FlashKlv::is_slice_overwriteable(&f0, &v0, sizeof(f0)));
+    TEST_ASSERT_FALSE(FlashKlv::is_slice_overwriteable(&v0, &f0, sizeof(f0)));
 
     const uint8_t f1 = 0b11111111;
     const uint8_t v1 = 0b01010101;
-    TEST_ASSERT_TRUE(FlashKlv::overwriteable(f1, v1));
-    TEST_ASSERT_FALSE(FlashKlv::overwriteable(v1, f1));
-    TEST_ASSERT_TRUE(FlashKlv::overwriteable(&f1, &v1, sizeof(f1)));
-    TEST_ASSERT_FALSE(FlashKlv::overwriteable(&v1, &f1, sizeof(f1)));
+    TEST_ASSERT_TRUE(FlashKlv::is_byte_overwriteable(f1, v1));
+    TEST_ASSERT_FALSE(FlashKlv::is_byte_overwriteable(v1, f1));
+    TEST_ASSERT_TRUE(FlashKlv::is_slice_overwriteable(&f1, &v1, sizeof(f1)));
+    TEST_ASSERT_FALSE(FlashKlv::is_slice_overwriteable(&v1, &f1, sizeof(f1)));
 }
 
 void test_klv16()
@@ -975,7 +975,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char **argv)
 {
     UNITY_BEGIN();
 
-    RUN_TEST(test_flash_overwriteable);
+    RUN_TEST(test_flash_is_byte_overwriteable);
     RUN_TEST(test_klv16);
     RUN_TEST(test_klv);
     RUN_TEST(test_klv2);
