@@ -3,6 +3,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <span>
 
 
 /*!
@@ -75,8 +76,8 @@ protected:
         uint8_t* data;
     };
 public:
-    FlashKlv(uint8_t flash_memory_slice[], size_t sectors_per_bank, size_t bankCount);
-    FlashKlv(uint8_t flash_memory_slice[], size_t sectors_per_bank);
+    FlashKlv(uint8_t* flash_memory_slice, size_t sectors_per_bank, size_t bankCount);
+    FlashKlv(uint8_t* flash_memory_slice, size_t sectors_per_bank);
     FlashKlv(size_t sectors_per_bank, size_t bankCount);
     explicit FlashKlv(size_t sectors_per_bank);
     ~FlashKlv() = default;
@@ -113,25 +114,25 @@ public:
     bool delete_records() const { return _mode & DELETE_RECORDS; }
     bool use_crc() const { return _mode & USE_CRC; }
 protected:
-    static bool is_sector_erased(size_t sector, const uint8_t flash_bank_memory_slice[]);
-    bool is_bank_erased(const uint8_t flash_bank_memory_slice[]) const;
-    int32_t erase_bank(uint8_t flash_bank_memory_slice[]);
-    static int32_t erase_sector(size_t sector, uint8_t flash_bank_memory_slice[]);
+    static bool is_sector_erased(size_t sector, const std::span<const uint8_t>& flash_bank_memory_slice);
+    bool is_bank_erased(const std::span<const uint8_t>& flash_bank_memory_slice) const;
+    int32_t erase_bank(std::span<uint8_t>& flash_bank_memory_slice);
+    static int32_t erase_sector(size_t sector, std::span<uint8_t>& flash_bank_memory_slice);
 
-    int32_t remove(uint16_t key, uint8_t flash_memory_slice[]);
-    int32_t write_klv_slice(uint16_t key, uint16_t length, const uint8_t* value_ptr, uint8_t flash_memory_slice[]);
-    void flash_mark_record_as_deleted(size_t pos, uint8_t flash_memory_slice[]);
-    void flash_write(size_t pos, uint16_t length, const uint8_t* value_ptr, uint8_t flash_memory_slice[]);
-    void flash_delete_and_write(size_t delete_pos, size_t pos, uint16_t key, uint16_t length, const uint8_t* value_ptr, uint8_t flash_memory_slice[]);
-    void flash_read_page(size_t page_index, const uint8_t flash_memory_slice[]);
-    void flash_write_page(size_t page_index, uint8_t flash_memory_slice[]);
+    int32_t remove(uint16_t key, std::span<uint8_t>& flash_memory_slice);
+    int32_t write_klv_slice(uint16_t key, uint16_t length, const uint8_t* value_ptr, std::span<uint8_t>& flash_memory_slice);
+    void flash_mark_record_as_deleted(size_t pos, std::span<uint8_t>& flash_bank_memory_slice);
+    void flash_write(size_t pos, uint16_t length, const uint8_t* value_ptr, std::span<uint8_t>& flash_memory_slice);
+    void flash_delete_and_write(size_t delete_pos, size_t pos, uint16_t key, uint16_t length, const uint8_t* value_ptr, std::span<uint8_t>& flash_memory_slice);
+    void flash_read_page(size_t page_index, const std::span<const uint8_t>& flash_memory_slice);
+    void flash_write_page(size_t page_index, std::span<uint8_t>& flash_memory_slice);
 
-    static bool is_record_empty_slice(size_t pos, const uint8_t flash_memory_slice[]);
-    static uint16_t get_record_key_slice(size_t pos, const uint8_t flash_memory_slice[]);
-    static uint16_t get_record_length_slice(size_t pos, const uint8_t flash_memory_slice[]);
-    static uint16_t get_record_position_increment_slice(size_t pos, const uint8_t flash_memory_slice[]);
-    static const uint8_t* get_record_value_ptr_slice(size_t pos, const uint8_t flash_memory_slice[]);
-    static size_t get_record_value_pos_slice(size_t pos, const uint8_t flash_memory_slice[]);
+    static bool is_record_empty_slice(size_t pos, const std::span<const uint8_t>& flash_memory_slice);
+    static uint16_t get_record_key_slice(size_t pos, const std::span<const uint8_t>& flash_memory_slice);
+    static uint16_t get_record_length_slice(size_t pos, const std::span<const uint8_t>& flash_memory_slice);
+    static uint16_t get_record_position_increment_slice(size_t pos, const std::span<const uint8_t>& flash_memory_slice);
+    static const uint8_t* get_record_value_ptr_slice(size_t pos, const std::span<const uint8_t>& flash_memory_slice);
+    static size_t get_record_value_pos_slice(size_t pos, const std::span<const uint8_t>& flash_memory_slice);
 
     static void call_flash_range_erase(void* param);
     static void call_flash_range_program(void* param);
@@ -147,18 +148,18 @@ public:
     const uint8_t* get_record_value_ptr(size_t pos) const { return get_record_value_ptr_slice(pos, _current_bank_memory_slice); }
     size_t get_record_value_pos(size_t pos) const { return get_record_value_pos_slice(pos, _current_bank_memory_slice); }
     int32_t copy_records_to_other_bank();
-    void swap_banks() { uint8_t* other_bank_memory_slice = _other_bank_memory_slice; _other_bank_memory_slice = _current_bank_memory_slice; _current_bank_memory_slice = other_bank_memory_slice; }
+    void swap_banks() { std::span<uint8_t> other_bank_memory_slice = _other_bank_memory_slice; _other_bank_memory_slice = _current_bank_memory_slice; _current_bank_memory_slice = other_bank_memory_slice; }
 // for testing
-    const uint8_t* flash_pos(size_t pos) { return _current_bank_memory_slice + pos; } //!< for testing
+    //const uint8_t* flash_pos(size_t pos) { return _current_bank_memory_slice + pos; } //!< for testing
     uint8_t flash_peek(size_t pos) { return _current_bank_memory_slice[pos]; } //!< for testing
     uint8_t flash_peek_other(size_t pos) { return _other_bank_memory_slice[pos]; } //!< for testing
-    const uint8_t* get_current_bank_memory_slice() const { return _current_bank_memory_slice; }
-    const uint8_t* get_other_bank_memory_slice() const { return _other_bank_memory_slice; }
+    const std::span<uint8_t>& get_current_bank_memory_slice() const { return _current_bank_memory_slice; }
+    const std::span<uint8_t>& get_other_bank_memory_slice() const { return _other_bank_memory_slice; }
     int32_t erase_sector(size_t sector) { return erase_sector(sector, _current_bank_memory_slice); }
 protected:
-    uint8_t* _flash_base_memory_slice;
-    uint8_t* _current_bank_memory_slice;
-    uint8_t* _other_bank_memory_slice {};
+    std::span<uint8_t> _flash_base_memory_slice;
+    std::span<uint8_t> _current_bank_memory_slice;
+    std::span<uint8_t> _other_bank_memory_slice;
     size_t _bank_memory_size; //!< the size of each memory bank
     size_t _bank_sector_count; //!< the number of sectors in each memory bank
     uint32_t _mode {OVERWRITE_RECORDS | DELETE_RECORDS};

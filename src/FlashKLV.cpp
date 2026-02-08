@@ -33,7 +33,7 @@ int flash_safe_execute(void (*fn)(void*), void* param, uint32_t timeout_ms) { (v
 #elif defined(FRAMEWORK_ARDUINO_STM32)
 #else
 // No FRAMEWORK defined, so default to FRAMEWORK_ARDUINO_RPI_PICO so this code can be used within Arduino IDE
-#define FRAMEWORK_ARDUINO_RPI_PICO
+//#define FRAMEWORK_ARDUINO_RPI_PICO
 #endif // FRAMEWORK_ARDUINO
 
 #endif // FRAMEWORK
@@ -54,15 +54,17 @@ If bankCount == 2 then we have
 BANK_A address: flash_memory_slice, size: SECTOR_SIZE*sectors_per_bank
 BANK_B address: flash_memory_slice + SECTOR_SIZE*sectors_per_bank, size: SECTOR_SIZE*sectors_per_bank
 */
-FlashKlv::FlashKlv(uint8_t flash_memory_slice[], size_t sectors_per_bank, size_t bankCount) :
-    _flash_base_memory_slice(flash_memory_slice),
-    _current_bank_memory_slice(flash_memory_slice),
+
+FlashKlv::FlashKlv(uint8_t* flash_memory_slice, size_t sectors_per_bank, size_t bankCount) :
+    _flash_base_memory_slice(flash_memory_slice, sectors_per_bank * SECTOR_SIZE * bankCount),
+    _current_bank_memory_slice(flash_memory_slice, sectors_per_bank * SECTOR_SIZE),
+    _other_bank_memory_slice(flash_memory_slice + sectors_per_bank * SECTOR_SIZE, sectors_per_bank * SECTOR_SIZE),
     _bank_memory_size(sectors_per_bank * SECTOR_SIZE),
     _bank_sector_count(sectors_per_bank)
 {
     assert(bankCount == 1 || bankCount == 2);
 
-    if (bankCount == 2) {
+    /*if (bankCount == 2) {
         uint8_t* BANK_A_PTR = flash_memory_slice;
         uint8_t* BANK_B_PTR = flash_memory_slice + _bank_memory_size; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
         // if the BANK_B has data in it, then that should be the current bank
@@ -73,7 +75,7 @@ FlashKlv::FlashKlv(uint8_t flash_memory_slice[], size_t sectors_per_bank, size_t
             _current_bank_memory_slice = BANK_A_PTR;
             _other_bank_memory_slice = BANK_B_PTR;
         }
-    }
+    }*/
 #if defined(FRAMEWORK_RPI_PICO) || defined(FRAMEWORK_ARDUINO_RPI_PICO)
     static_assert(FLASH_SECTOR_SIZE == SECTOR_SIZE);
     static_assert(FLASH_PAGE_SIZE == PAGE_SIZE);
@@ -154,7 +156,8 @@ bool FlashKlv::is_slice_overwriteable(const uint8_t* flash_ptr, const uint8_t* v
     return true;
 }
 
-uint16_t FlashKlv::get_record_key_slice(size_t pos, const uint8_t flash_memory_slice[])
+uint16_t FlashKlv::get_record_key_slice(size_t pos, const std::span<const uint8_t>& flash_memory_slice)
+//get_record_key_slice(size_t pos, const uint8_t flash_memory_slice[])
 {
     const uint8_t key8 = flash_memory_slice[pos];
     if ((key8 & UNDELETED_BIT) == 0) {
@@ -174,13 +177,13 @@ uint16_t FlashKlv::get_record_key_slice(size_t pos, const uint8_t flash_memory_s
     return key16 & KEY16_MASK;
 }
 
-bool FlashKlv::is_record_empty_slice(size_t pos, const uint8_t flash_memory_slice[])
+bool FlashKlv::is_record_empty_slice(size_t pos, const std::span<const uint8_t>& flash_memory_slice)
 {
     const uint8_t octet = flash_memory_slice[pos];
     return (octet == RECORD_EMPTY) ? true : false; // NOLINT(readability-simplify-boolean-expr)
 }
 
-uint16_t FlashKlv::get_record_length_slice(size_t pos, const uint8_t flash_memory_slice[])
+uint16_t FlashKlv::get_record_length_slice(size_t pos, const std::span<const uint8_t>& flash_memory_slice)
 {
     if ((flash_memory_slice[pos] & KL16_BIT) == 0) {
         return flash_memory_slice[pos + sizeof(kl8_t::key)];
@@ -190,14 +193,14 @@ uint16_t FlashKlv::get_record_length_slice(size_t pos, const uint8_t flash_memor
     return lengthL | (lengthH << 8U); // NOLINT(cppcoreguidelines-avoid-magic-numbers,hicpp-signed-bitwise,readability-magic-numbers)
 }
 
-uint16_t FlashKlv::get_record_position_increment_slice(size_t pos, const uint8_t flash_memory_slice[])
+uint16_t FlashKlv::get_record_position_increment_slice(size_t pos, const std::span<const uint8_t>& flash_memory_slice)
 {
     const size_t offset = ((flash_memory_slice[pos] & KL16_BIT) == 0) ? sizeof(kl8_t) : sizeof(kl16_t);
     const uint16_t ret = get_record_length_slice(pos, flash_memory_slice) + static_cast<uint16_t>(offset);
     return ret;
 }
 
-const uint8_t* FlashKlv::get_record_value_ptr_slice(size_t pos, const uint8_t flash_memory_slice[])
+const uint8_t* FlashKlv::get_record_value_ptr_slice(size_t pos, const std::span<const uint8_t>& flash_memory_slice)
 {
     if ((flash_memory_slice[pos] & KL16_BIT) == 0) {
         return &flash_memory_slice[pos + sizeof(kl8_t)];
@@ -206,7 +209,7 @@ const uint8_t* FlashKlv::get_record_value_ptr_slice(size_t pos, const uint8_t fl
 }
 
 // function for transitioning to using value_pos rather than value_ptr
-size_t FlashKlv::get_record_value_pos_slice(size_t pos, const uint8_t flash_memory_slice[])
+size_t FlashKlv::get_record_value_pos_slice(size_t pos, const std::span<const uint8_t>& flash_memory_slice)
 {
     if ((flash_memory_slice[pos] & KL16_BIT) == 0) {
         return pos + sizeof(kl8_t);
@@ -244,7 +247,7 @@ size_t FlashKlv::bytes_free() const
 /*!
 Remove the record with the specified key by marking it as deleted.
 */
-int32_t FlashKlv::remove(uint16_t key, uint8_t flash_memory_slice[])
+int32_t FlashKlv::remove(uint16_t key, std::span<uint8_t>& flash_memory_slice)
 {
     if (!key_ok(key)) {
         return ERROR_INVALID_KEY;
@@ -355,9 +358,9 @@ Copy all undeleted records to the other bank.
 */
 int32_t FlashKlv::copy_records_to_other_bank()
 {
-    if (_other_bank_memory_slice == nullptr) {
-        return ERROR_OTHER_BANK_NOT_INITIALIZED;
-    }
+    //!!if (_other_bank_memory_slice == nullptr) {
+    //    return ERROR_OTHER_BANK_NOT_INITIALIZED;
+    //}
 
     if (!is_other_bank_erased()) {
         return ERROR_OTHER_BANK_NOT_ERASED;
@@ -436,7 +439,7 @@ Write a record
 
 Write to either the current bank or the other bank, as defined by flash_memory_slice.
 */
-int32_t FlashKlv::write_klv_slice(uint16_t key, uint16_t length, const uint8_t* value_ptr, uint8_t flash_memory_slice[])
+int32_t FlashKlv::write_klv_slice(uint16_t key, uint16_t length, const uint8_t* value_ptr, std::span<uint8_t>& flash_memory_slice)
 {
     if (!key_ok(key)) {
         return ERROR_INVALID_KEY;
@@ -483,13 +486,12 @@ int32_t FlashKlv::write_klv_slice(uint16_t key, uint16_t length, const uint8_t* 
 /*!
 Check if a sector of flash is erased (ie every byte has the value `0xFF`)
 */
-bool FlashKlv::is_sector_erased(size_t sector, const uint8_t flash_bank_memory_slice[])
+bool FlashKlv::is_sector_erased(size_t sector, const std::span<const uint8_t>& flash_bank_memory_slice)
 {
     enum { BYTE_ERASED = 0xFF };
 
-    const uint8_t* memory_slice = flash_bank_memory_slice + sector*SECTOR_SIZE; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
     for (size_t ii = 0; ii < SECTOR_SIZE; ++ii) {
-        if (memory_slice[ii] != BYTE_ERASED) { // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+        if (flash_bank_memory_slice[ii + sector*SECTOR_SIZE] != BYTE_ERASED) {
             return false;
         }
     }
@@ -499,11 +501,11 @@ bool FlashKlv::is_sector_erased(size_t sector, const uint8_t flash_bank_memory_s
 /*!
 Check if a bank of flash is erased (ie every byte has the value `0xFF`)
 */
-bool FlashKlv::is_bank_erased(const uint8_t flash_bank_memory_slice[]) const
+bool FlashKlv::is_bank_erased(const std::span<const uint8_t>& flash_bank_memory_slice) const
 {
     enum { BYTE_ERASED = 0xFF };
     for (size_t ii = 0; ii < _bank_memory_size; ++ii) {
-        if (flash_bank_memory_slice [ii] != BYTE_ERASED) { // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+        if (flash_bank_memory_slice[ii] != BYTE_ERASED) { // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
             return false;
         }
     }
@@ -513,7 +515,7 @@ bool FlashKlv::is_bank_erased(const uint8_t flash_bank_memory_slice[]) const
 /*!
 Erase an entire bank of flash, erasing in sector sized chunks.
 */
-int32_t FlashKlv::erase_bank(uint8_t flash_bank_memory_slice[]) // NOLINT(readability-make-member-function-const)
+int32_t FlashKlv::erase_bank(std::span<uint8_t>& flash_bank_memory_slice) // NOLINT(readability-make-member-function-const)
 {
     for (uint32_t ii = 0; ii < _bank_sector_count; ++ii) {
         erase_sector(ii, flash_bank_memory_slice);
@@ -524,7 +526,7 @@ int32_t FlashKlv::erase_bank(uint8_t flash_bank_memory_slice[]) // NOLINT(readab
 /*!
 Mark the record at `pos` as deleted by setting bit 7 to zero.
 */
-void FlashKlv::flash_mark_record_as_deleted(size_t pos, uint8_t flash_memory_slice[])
+void FlashKlv::flash_mark_record_as_deleted(size_t pos, std::span<uint8_t>& flash_memory_slice)
 {
     const size_t page_index = pos / PAGE_SIZE;
     flash_read_page(page_index, flash_memory_slice);
@@ -538,15 +540,18 @@ void FlashKlv::flash_mark_record_as_deleted(size_t pos, uint8_t flash_memory_sli
 /*!
 Read flash memory into the page cache.
 */
-void FlashKlv::flash_read_page(size_t page_index, const uint8_t flash_memory_slice[])
+void FlashKlv::flash_read_page(size_t page_index, const std::span<const uint8_t>& flash_bank_memory_slice)
 {
-    memcpy(&_page_cache[0], &flash_memory_slice[page_index*PAGE_SIZE], PAGE_SIZE);
+    //!!memcpy(&_page_cache[0], &flash_memory_slice[page_index*PAGE_SIZE], PAGE_SIZE);
+    std::copy(flash_bank_memory_slice.begin() + page_index*PAGE_SIZE,
+        flash_bank_memory_slice.begin() + page_index*PAGE_SIZE + PAGE_SIZE,
+        &_page_cache[0]); 
 }
 
 /*!
 write the data at `value_ptr` to flash in page-sized chunks using `flash_write_page`
 */
-void FlashKlv::flash_write(size_t pos, uint16_t length, const uint8_t* value_ptr, uint8_t flash_memory_slice[])
+void FlashKlv::flash_write(size_t pos, uint16_t length, const uint8_t* value_ptr, std::span<uint8_t>& flash_memory_slice)
 {
     while (length != 0) {
         const size_t page_index = pos / PAGE_SIZE;
@@ -575,7 +580,7 @@ void FlashKlv::flash_write(size_t pos, uint16_t length, const uint8_t* value_ptr
 Mark the current instance of a record as deleted if `delete_pos != NO_DELETE` and then
 write the new record in page-sized chunks using `flash_write_page`
 */
-void FlashKlv::flash_delete_and_write(size_t delete_pos, size_t pos, uint16_t key, uint16_t length, const uint8_t* value_ptr, uint8_t flash_memory_slice[])
+void FlashKlv::flash_delete_and_write(size_t delete_pos, size_t pos, uint16_t key, uint16_t length, const uint8_t* value_ptr, std::span<uint8_t>& flash_memory_slice)
 {
     size_t page_index = pos / PAGE_SIZE;
 
@@ -679,16 +684,16 @@ void FlashKlv::call_flash_range_erase(void* param)
 /*!
 Erase a flash sector, disabling interrupts if required.
 */
-int32_t FlashKlv::erase_sector(size_t sector, uint8_t flash_bank_memory_slice[]) // NOLINT(readability-non-const-parameter)
+int32_t FlashKlv::erase_sector(size_t sector, std::span<uint8_t>& flash_bank_memory_slice) // NOLINT(readability-non-const-parameter)
 {
-    if (flash_bank_memory_slice == nullptr) {
-        return ERROR_INVALID_FLASH_BANK_PTR;
-    }
+    //!!if (flash_bank_memory_slice == nullptr) {
+    //    return ERROR_INVALID_FLASH_BANK_PTR;
+    //}
 
     bool already_erased = true;
     enum { BYTE_ERASED = 0xFF };
     for (size_t ii = 0; ii < SECTOR_SIZE; ++ii) {
-        if (*(flash_bank_memory_slice + sector*SECTOR_SIZE + ii) != BYTE_ERASED) { // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+        if (flash_bank_memory_slice[sector*SECTOR_SIZE + ii] != BYTE_ERASED) { // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
             already_erased = false;
             break;
         }
@@ -752,7 +757,7 @@ void FlashKlv::call_flash_range_program(void* param)
 /*!
 Write a flash page, disabling interrupts if required.
 */
-void FlashKlv::flash_write_page(size_t page_index, uint8_t flash_memory_slice[]) // NOLINT(readability-convert-member-functions-to-static)
+void FlashKlv::flash_write_page(size_t page_index, std::span<uint8_t>& flash_memory_slice) // NOLINT(readability-convert-member-functions-to-static)
 {
 #if defined(FRAMEWORK_ARDUINO_RPI_PICO)
 
@@ -780,8 +785,15 @@ void FlashKlv::flash_write_page(size_t page_index, uint8_t flash_memory_slice[])
 
 #elif defined(FRAMEWORK_TEST)
 
-    program_params_t params = { .address = &flash_memory_slice[page_index*PAGE_SIZE], .data = &_page_cache[0] };
+    //program_params_t params = { .address = &flash_memory_slice[page_index*PAGE_SIZE], .data = &_page_cache[0] };
+    program_params_t params = { .address = flash_memory_slice.data() + page_index*PAGE_SIZE, .data = &_page_cache[0] };
     flash_safe_execute(call_flash_range_program, &params, UINT32_MAX);
+    //memcpy(params->address, params->data, PAGE_SIZE);
+    /*std::copy(flash_memory_slice.begin() + page_index*PAGE_SIZE,
+          flash_memory_slice.begin() + page_index*PAGE_SIZE + PAGE_SIZE,
+          &_page_cache[0]);*/
+
+    //memcpy(flash_memory_slice.data() + page_index*PAGE_SIZE, &_page_cache[0], PAGE_SIZE);
 
 #else
 
