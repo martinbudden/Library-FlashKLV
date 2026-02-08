@@ -1,3 +1,3 @@
 # Test
 
-Tests for the FlashKLV library.
+Tests for the FlashKlv library.

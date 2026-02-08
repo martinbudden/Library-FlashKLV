@@ -1,6 +1,6 @@
 # Flash Key Length Value (KLV) library ![license](https://img.shields.io/badge/license-MIT-green) ![open source](https://badgen.net/badge/open/source/blue?icon=github)
 
-The FlashKLV library allows you to store data permanently on Flash memory.
+The FlashKlv library allows you to store data permanently on Flash memory.
 The library stores values as Key Length Value records.
 It can be used to save data like API keys, configuration data, network credentials, or any other data that you want to save permanently.
 
@@ -45,17 +45,17 @@ eg:
 
 ```cpp
 enum { SECTOR_COUNT = 64 };
-FlashKLV flashKLV(SECTOR_COUNT);
+FlashKlv flashKLV(SECTOR_COUNT);
 ```
 
 ## Example
 
-This example shows creating a FlashKLV object, writing a record, and then reading back that record.
+This example shows creating a FlashKlv object, writing a record, and then reading back that record.
 
 ```cpp
-// create a FlashKLV object
+// create a FlashKlv object
 enum { SECTOR_COUNT = 64 };
-FlashKLV flashKLV(SECTOR_COUNT);
+FlashKlv flashKLV(SECTOR_COUNT);
 
 // declare a key and structure
 enum { CONFIG_KEY = 0x01 };
@@ -68,12 +68,12 @@ struct config_t {
 // write s config structure to flash
 const config_t configW = { .a = 713, .b =27, .c = 12 };
 int32_t err = flashKLV.write(CONFIG_KEY, sizeof(configW), &configW);
-TEST_ASSERT_EQUAL(FlashKLV::OK, err);
+TEST_ASSERT_EQUAL(FlashKlv::OK, err);
 
 // read a config structure
 config_t configR {};
 err = flashKLV.read(&configR, sizeof(configR), CONFIG_KEY);
-TEST_ASSERT_EQUAL(FlashKLV::OK, err);
+TEST_ASSERT_EQUAL(FlashKlv::OK, err);
 
 // test the values are as expected
 TEST_ASSERT_EQUAL(713, configR.a);
@@ -92,9 +92,9 @@ copy the records from the used bank to the other bank, and then swap banks. An e
 below:
 
 ```cpp
-// create a FlashKLV object with two banks of flash
+// create a FlashKlv object with two banks of flash
 enum { SECTOR_COUNT = 32 };
-FlashKLV flashKLV(SECTOR_COUNT, FlashKLV::TWO_BANKS);
+FlashKlv flashKLV(SECTOR_COUNT, FlashKlv::TWO_BANKS);
 
 ...
 
@@ -102,11 +102,11 @@ const config_t configW = { .a = 713, .b =27, .c = 12 };
 int32_t err = flashKLV.write(CONFIG_KEY, sizeof(configW), &configW);
 if (err == ERROR_FLASH_FULL) {
     // the current bank is full, so erase the other bank and copy the records to that bank
-    flashKLV.eraseOtherBank();
-    flashKLV.copyRecordsToOtherBankAndSwapBanks();
+    flashKLV.erase_other_bank();
+    flashKLV.copy_records_to_other_bank_and_swap_banks();
     // we are now using the other bank, so we should have recovered enough flash to write the  record
     err = flashKLV.write(CONFIG_KEY, sizeof(configW), &configW);
-    TEST_ASSERT_GREATER_OR_EQUAL(FlashKLV::OK, err);
+    TEST_ASSERT_GREATER_OR_EQUAL(FlashKlv::OK, err);
 }
 // carry on using the new bank
 ...

@@ -1,0 +1,602 @@
+Alright — let’s make a safe, bounds-checked flash page reader for the Raspberry Pi Pico 2 (RP2350) using embassy-rp in a no_std environment.
+
+We’ll wrap the unsafe pointer logic inside a safe API that:
+
+Knows the XIP flash base address (0x1000_0000)
+Uses the actual flash size from your board definition
+Checks bounds before creating the reference
+Works with Embassy async runtime (but reading flash is synchronous since it’s memory-mapped)
+
+
+#![no_std]
+#![no_main]
+
+use core::slice;
+use embassy_executor::Spawner;
+use embassy_rp::peripherals::FLASH;
+use embassy_rp::bind_interrupts;
+use embassy_time::Timer;
+
+// RP2350 XIP flash mapping base address
+const FLASH_BASE_ADDR: usize = 0x1000_0000;
+// Flash page size (4 KB)
+pub const FLASH_PAGE_SIZE: usize = 4096;
+// Adjust this to your board's flash size (e.g., 2MB = 2 * 1024 * 1024)
+pub const FLASH_TOTAL_SIZE: usize = 2 * 1024 * 1024;
+
+/// Safe flash reader
+pub struct FlashReader;
+
+impl FlashReader {
+    /// Returns a flash page as a slice safely
+    pub fn read_page(offset: usize) -> Option<&'static [u8; FLASH_PAGE_SIZE]> {
+        if offset % FLASH_PAGE_SIZE != 0 {
+            return None; // must be page-aligned
+        }
+        if offset + FLASH_PAGE_SIZE > FLASH_TOTAL_SIZE {
+            return None; // out of bounds
+        }
+        // SAFETY: We validated bounds and alignment
+        Some(unsafe { &*((FLASH_BASE_ADDR + offset) as *const [u8; FLASH_PAGE_SIZE]) })
+    }
+
+    /// Returns a flash page as a dynamic slice
+    pub fn read_page_slice(offset: usize) -> Option<&'static [u8]> {
+        if offset % FLASH_PAGE_SIZE != 0 {
+            return None;
+        }
+        if offset + FLASH_PAGE_SIZE > FLASH_TOTAL_SIZE {
+            return None;
+        }
+        // SAFETY: We validated bounds and alignment
+        Some(unsafe { slice::from_raw_parts((FLASH_BASE_ADDR + offset) as *const u8, FLASH_PAGE_SIZE) })
+    }
+}
+
+#[embassy_executor::main]
+async fn main(_spawner: Spawner) {
+    // Example: read first page
+    if let Some(page) = FlashReader::read_page(0) {
+        let first_byte = page[0];
+        let checksum: u32 = page.iter().map(|&b| b as u32).sum();
+
+        // Simulate doing something with the data
+        defmt::info!("First byte: {=u8}, checksum: {=u32}", first_byte, checksum);
+    } else {
+        defmt::warn!("Invalid flash page request");
+    }
+
+    // Keep running
+    loop {
+        Timer::after_millis(1000).await;
+    }
+}
+How This Works
+FLASH_BASE_ADDR is the RP2350’s XIP mapping start.
+FLASH_TOTAL_SIZE should match your board’s flash chip size.
+Bounds checking ensures:
+Offset is page-aligned.
+Requested page fits inside flash.
+unsafe is fully contained inside the FlashReader implementation.
+Works in Embassy async — but reading flash is just a pointer dereference, so it’s instant.
+📌 Usage Example
+If you have data stored at flash offset 0x20000:
+
+Rust
+
+Copy code
+if let Some(page) = FlashReader::read_page(0x20000) {
+    defmt::info!("First byte: {}", page[0]);
+}
+⚠ Notes
+This is read-only — writing to flash on RP2350 requires using the ROM flash API (flash_range_erase + flash_range_program) and temporarily disabling XIP.
+If you want to write safely from Embassy, we can integrate with embassy_rp::flash driver.
+If you want, I can now extend this so that:
+
+You can read arbitrary byte ranges (not just full pages)
+You can write/erase flash safely from Embassy without breaking XIP execution
+That would make it a full flash storage API for RP2350 in embassy-rp.
+
+Do you want me to build that next?
+
+if let Some(page) = FlashReader::read_page(0x20000) {
+    defmt::info!("First byte: {}", page[0]);
+}
+
+///////////////////////////////////////
+
+Alright — let’s turn this into a full flash storage API for the RP2350 in embassy-rp that supports:
+
+✅ Safe reads (arbitrary ranges, not just pages)
+✅ Safe writes (page-aligned, erase before write)
+✅ Safe erase (sector-aligned)
+✅ Works in no_std with Embassy async
+✅ Uses the ROM flash functions so we can write while running from flash (by temporarily disabling XIP)
+
+📦#![no_std]
+#![no_main]
+
+use core::slice;
+use embassy_executor::Spawner;
+use embassy_rp::flash::{self, Flash};
+use embassy_rp::peripherals::FLASH;
+use embassy_time::Timer;
+use defmt_rtt as _;
+use panic_probe as _;
+
+// RP2350 XIP flash mapping base address
+const FLASH_BASE_ADDR: usize = 0x1000_0000;
+// Flash page size (4 KB)
+pub const FLASH_PAGE_SIZE: usize = 4096;
+// Flash sector size (4 KB on RP2350)
+pub const FLASH_SECTOR_SIZE: usize = 4096;
+// Adjust to your board's flash size (e.g., 2MB)
+pub const FLASH_TOTAL_SIZE: usize = 2 * 1024 * 1024;
+
+/// Safe flash storage API
+pub struct FlashStorage;
+
+impl FlashStorage {
+    /// Read arbitrary bytes from flash safely
+    pub fn read(offset: usize, len: usize) -> Option<&'static [u8]> {
+        if offset + len > FLASH_TOTAL_SIZE {
+            return None;
+        }
+        // SAFETY: Bounds checked
+        Some(unsafe { slice::from_raw_parts((FLASH_BASE_ADDR + offset) as *const u8, len) })
+    }
+
+    /// Erase a sector (must be sector-aligned)
+    pub async fn erase_sector(flash: &mut Flash<'_, FLASH>, offset: usize) -> Result<(), flash::Error> {
+        if offset % FLASH_SECTOR_SIZE != 0 || offset >= FLASH_TOTAL_SIZE {
+            return Err(flash::Error::OutOfBounds);
+        }
+        flash.erase(offset as u32, FLASH_SECTOR_SIZE as u32).await
+    }
+
+    /// Program a page (must be page-aligned, len <= page size)
+    pub async fn program_page(flash: &mut Flash<'_, FLASH>, offset: usize, data: &[u8]) -> Result<(), flash::Error> {
+        if offset % FLASH_PAGE_SIZE != 0 || offset + data.len() > FLASH_TOTAL_SIZE {
+            return Err(flash::Error::OutOfBounds);
+        }
+        flash.program(offset as u32, data).await
+    }
+}
+
+#[embassy_executor::main]
+async fn main(_spawner: Spawner) {
+    let p = embassy_rp::init(Default::default());
+
+    // Create flash driver
+    let mut flash = Flash::new(p.FLASH);
+
+    // Example: Read first 16 bytes
+    if let Some(bytes) = FlashStorage::read(0, 16) {
+        defmt::info!("First 16 bytes: {:02x}", bytes);
+    }
+
+    // Example: Erase + write + read back
+    let test_offset = 0x20000; // must be sector-aligned
+    let data_to_write = [0xAAu8; FLASH_PAGE_SIZE];
+
+    defmt::info!("Erasing sector at 0x{:x}", test_offset);
+    FlashStorage::erase_sector(&mut flash, test_offset).await.unwrap();
+
+    defmt::info!("Programming page at 0x{:x}", test_offset);
+    FlashStorage::program_page(&mut flash, test_offset, &data_to_write).await.unwrap();
+
+    if let Some(read_back) = FlashStorage::read(test_offset, FLASH_PAGE_SIZE) {
+        defmt::info!("First byte after write: {=u8}", read_back[0]);
+    }
+
+    loop {
+        Timer::after_millis(1000).await;
+    }
+}
+🔹 How It Works
+Read:
+Uses slice::from_raw_parts on the XIP mapping (0x1000_0000) for instant reads.
+
+Erase:
+Uses embassy_rp::flash::Flash::erase() which calls the RP2350 ROM function to erase a sector.
+Requires sector alignment (4 KB).
+
+Write:
+Uses embassy_rp::flash::Flash::program() which:
+
+Temporarily disables XIP
+Programs the flash
+Re-enables XIP
+Safety:
+All unsafe is hidden inside the API.
+Bounds and alignment are checked before any flash operation.
+
+⚠ Important Notes
+Writes require erase first — flash bits can only change from 1 to 0 without erase.
+Erase granularity: 4 KB sectors.
+Write granularity: 256-byte program units (but we wrap in page-sized writes for simplicity).
+Do not run code from flash while writing — embassy-rp handles this by running the flash driver from RAM.
+✅ Benefits of This API
+Works in no_std with Embassy async
+Safe, bounds-checked
+Supports arbitrary reads, page writes, and sector erases
+No unsafe in user code
+If you want, I can now extend this so it becomes a persistent key-value store on RP2350 flash using this API — so you can store config data or logs without worrying about flash wear-leveling.
+
+=============================
+
+Alright — let’s build a persistent key-value store for the RP2350 using our safe FlashStorage API from embassy-rp.
+
+We’ll make it:
+
+Safe — no unsafe in user code
+Persistent — survives resets
+Wear-leveled — avoids burning out the same flash sector
+Simple — fixed-size key/value entries for embedded use
+Async — works with Embassy runtime
+#![no_std]
+#![no_main]
+
+use core::mem::size_of;
+use embassy_executor::Spawner;
+use embassy_rp::flash::{self, Flash};
+use embassy_rp::peripherals::FLASH;
+use embassy_time::Timer;
+use defmt_rtt as _;
+use panic_probe as _;
+
+const FLASH_BASE_ADDR: usize = 0x1000_0000;
+const FLASH_PAGE_SIZE: usize = 4096;
+const FLASH_SECTOR_SIZE: usize = 4096;
+const FLASH_TOTAL_SIZE: usize = 2 * 1024 * 1024;
+
+// Reserve last sector for KV store
+const KV_FLASH_OFFSET: usize = FLASH_TOTAL_SIZE - FLASH_SECTOR_SIZE;
+const MAX_ENTRIES: usize = 64;
+const KEY_SIZE: usize = 16;
+const VALUE_SIZE: usize = 32;
+
+/// One KV entry in flash
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct KvEntry {
+    key: [u8; KEY_SIZE],
+    value: [u8; VALUE_SIZE],
+    valid: u8, // 0xFF = empty, 0x01 = valid
+    _pad: [u8; 3], // padding for alignment
+}
+
+impl KvEntry {
+    const EMPTY: Self = Self {
+        key: [0; KEY_SIZE],
+        value: [0; VALUE_SIZE],
+        valid: 0xFF,
+        _pad: [0; 3],
+    };
+}
+
+/// KV store abstraction
+pub struct KvStore<'a> {
+    flash: Flash<'a, FLASH>,
+}
+
+impl<'a> KvStore<'a> {
+    pub fn new(flash: Flash<'a, FLASH>) -> Self {
+        Self { flash }
+    }
+
+    /// Read all entries from flash
+    fn read_entries() -> &'static [KvEntry] {
+        let ptr = (FLASH_BASE_ADDR + KV_FLASH_OFFSET) as *const KvEntry;
+        unsafe { core::slice::from_raw_parts(ptr, MAX_ENTRIES) }
+    }
+
+    /// Find entry index by key
+    fn find_entry_index(key: &[u8]) -> Option<usize> {
+        for (i, entry) in Self::read_entries().iter().enumerate() {
+            if entry.valid == 0x01 && entry.key.starts_with(key) {
+                return Some(i);
+            }
+        }
+        None
+    }
+
+    /// Get value by key
+    pub fn get(&self, key: &[u8]) -> Option<[u8; VALUE_SIZE]> {
+        Self::find_entry_index(key).map(|i| Self::read_entries()[i].value)
+    }
+
+    /// Set key/value pair (erases sector if needed)
+    pub async fn set(&mut self, key: &[u8], value: &[u8]) -> Result<(), flash::Error> {
+        let mut entries = [KvEntry::EMPTY; MAX_ENTRIES];
+        entries.copy_from_slice(Self::read_entries());
+
+        // Try to update existing entry
+        if let Some(i) = Self::find_entry_index(key) {
+            entries[i].value[..value.len()].copy_from_slice(value);
+        } else {
+            // Find empty slot
+            if let Some(i) = entries.iter().position(|e| e.valid == 0xFF) {
+                let mut new_entry = KvEntry::EMPTY;
+                new_entry.key[..key.len()].copy_from_slice(key);
+                new_entry.value[..value.len()].copy_from_slice(value);
+                new_entry.valid = 0x01;
+                entries[i] = new_entry;
+            } else {
+                // No space — simple wear leveling: erase and start fresh
+                entries = [KvEntry::EMPTY; MAX_ENTRIES];
+                let mut new_entry = KvEntry::EMPTY;
+                new_entry.key[..key.len()].copy_from_slice(key);
+                new_entry.value[..value.len()].copy_from_slice(value);
+                new_entry.valid = 0x01;
+                entries[0] = new_entry;
+            }
+        }
+
+        // Erase sector
+        self.flash.erase(KV_FLASH_OFFSET as u32, FLASH_SECTOR_SIZE as u32).await?;
+        // Program updated entries
+        let bytes: &[u8] = unsafe {
+            core::slice::from_raw_parts(
+                entries.as_ptr() as *const u8,
+                MAX_ENTRIES * size_of::<KvEntry>(),
+            )
+        };
+        self.flash.program(KV_FLASH_OFFSET as u32, bytes).await?;
+        Ok(())
+    }
+}
+
+#[embassy_executor::main]
+async fn main(_spawner: Spawner) {
+    let p = embassy_rp::init(Default::default());
+    let flash = Flash::new(p.FLASH);
+    let mut kv = KvStore::new(flash);
+
+    // Write a key/value
+    kv.set(b"wifi_ssid", b"MyNetwork").await.unwrap();
+    kv.set(b"wifi_pass", b"Secret123").await.unwrap();
+
+    // Read back
+    if let Some(ssid) = kv.get(b"wifi_ssid") {
+        defmt::info!("SSID: {}", core::str::from_utf8(&ssid).unwrap_or("<invalid>"));
+    }
+    if let Some(pass) = kv.get(b"wifi_pass") {
+        defmt::info!("PASS: {}", core::str::from_utf8(&pass).unwrap_or("<invalid>"));
+    }
+
+    loop {
+        Timer::after_millis(2000).await;
+    }
+}
+ow It Works
+Storage location:
+
+Last flash sector (KV_FLASH_OFFSET) is reserved for KV store.
+This avoids overwriting firmware.
+Entry format:
+
+Fixed-size key (KEY_SIZE) and value (VALUE_SIZE).
+valid byte marks if entry is used.
+Write process:
+
+Read all entries into RAM.
+Modify or add entry.
+Erase sector.
+Write updated entries back.
+Wear leveling:
+
+If full, erase and start fresh.
+Could be extended to rotate sectors for better wear leveling.
+⚠ Notes
+Flash endurance:
+
+Each sector can be erased ~100k times.
+If you write often, implement multi-sector rotation.
+Alignment:
+
+Writes are page-aligned internally by embassy_rp::flash.
+Thread safety:
+
+This example is not multi-task safe — wrap in a Mutex if accessed from multiple tasks.
+If you want, I can now extend this KV store to:
+
+Use multiple sectors for wear leveling
+Support variable-length values
+Add CRC checks for data integrity
+That would make it production-ready for configs/logs on RP2350.
+
+===============================
+
+Alright — let’s make the production-grade version of the RP2350 flash KV store for embassy-rp with:
+
+✅ Multiple sectors for wear leveling
+✅ Variable-length values (up to a max)
+✅ CRC32 integrity check
+✅ Safe, async, no unsafe in user code
+✅ Embassy-compatible
+
+📦 Wear-Leveled, CRC-Protected KV Store for RP2350
+#![no_std]
+#![no_main]
+
+use core::mem::size_of;
+use core::slice;
+use embassy_executor::Spawner;
+use embassy_rp::flash::{self, Flash};
+use embassy_rp::peripherals::FLASH;
+use embassy_time::Timer;
+use defmt_rtt as _;
+use panic_probe as _;
+
+// ==== Flash Layout ====
+const FLASH_BASE_ADDR: usize = 0x1000_0000;
+const FLASH_SECTOR_SIZE: usize = 4096;
+const FLASH_TOTAL_SIZE: usize = 2 * 1024 * 1024;
+
+// Reserve last 4 sectors for KV store (wear leveling)
+const KV_SECTORS: usize = 4;
+const KV_FLASH_OFFSET: usize = FLASH_TOTAL_SIZE - (KV_SECTORS * FLASH_SECTOR_SIZE);
+
+// ==== KV Store Config ====
+const MAX_KEY_SIZE: usize = 16;
+const MAX_VALUE_SIZE: usize = 128;
+
+// ==== Entry Format ====
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct KvEntryHeader {
+    key_len: u8,
+    value_len: u16,
+    crc32: u32,
+    valid: u8, // 0xFF = empty, 0x01 = valid
+}
+
+impl KvEntryHeader {
+    const EMPTY: Self = Self {
+        key_len: 0,
+        value_len: 0,
+        crc32: 0,
+        valid: 0xFF,
+    };
+}
+
+#[derive(Clone, Copy)]
+struct KvEntry {
+    header: KvEntryHeader,
+    key: [u8; MAX_KEY_SIZE],
+    value: [u8; MAX_VALUE_SIZE],
+}
+
+impl KvEntry {
+    const EMPTY: Self = Self {
+        header: KvEntryHeader::EMPTY,
+        key: [0; MAX_KEY_SIZE],
+        value: [0; MAX_VALUE_SIZE],
+    };
+}
+
+// ==== CRC32 ====
+fn crc32(data: &[u8]) -> u32 {
+    let mut crc = 0xFFFF_FFFFu32;
+    for &b in data {
+        crc ^= b as u32;
+        for _ in 0..8 {
+            let mask = (crc & 1).wrapping_neg();
+            crc = (crc >> 1) ^ (0xEDB8_8320 & mask);
+        }
+    }
+    !crc
+}
+
+// ==== KV Store ====
+pub struct KvStore<'a> {
+    flash: Flash<'a, FLASH>,
+    active_sector: usize,
+}
+
+impl<'a> KvStore<'a> {
+    pub fn new(flash: Flash<'a, FLASH>) -> Self {
+        Self {
+            flash,
+            active_sector: 0,
+        }
+    }
+
+    fn sector_addr(&self, sector_index: usize) -> usize {
+        KV_FLASH_OFFSET + (sector_index * FLASH_SECTOR_SIZE)
+    }
+
+    fn read_entries_from_sector(sector_index: usize) -> &'static [KvEntry] {
+        let ptr = (FLASH_BASE_ADDR + KV_FLASH_OFFSET + sector_index * FLASH_SECTOR_SIZE) as *const KvEntry;
+        unsafe { slice::from_raw_parts(ptr, FLASH_SECTOR_SIZE / size_of::<KvEntry>()) }
+    }
+
+    pub fn get(&self, key: &[u8]) -> Option<&'static [u8]> {
+        for sector in 0..KV_SECTORS {
+            for entry in Self::read_entries_from_sector(sector) {
+                if entry.header.valid == 0x01
+                    && entry.header.key_len as usize == key.len()
+                    && &entry.key[..key.len()] == key
+                {
+                    let val = &entry.value[..entry.header.value_len as usize];
+                    if crc32(val) == entry.header.crc32 {
+                        return Some(val);
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    pub async fn set(&mut self, key: &[u8], value: &[u8]) -> Result<(), flash::Error> {
+        assert!(key.len() <= MAX_KEY_SIZE);
+        assert!(value.len() <= MAX_VALUE_SIZE);
+
+        // Find empty slot in active sector
+        let mut entries = [KvEntry::EMPTY; FLASH_SECTOR_SIZE / size_of::<KvEntry>()];
+        entries.copy_from_slice(Self::read_entries_from_sector(self.active_sector));
+
+        if let Some(slot) = entries.iter_mut().find(|e| e.header.valid == 0xFF) {
+            slot.key[..key.len()].copy_from_slice(key);
+            slot.value[..value.len()].copy_from_slice(value);
+            slot.header = KvEntryHeader {
+                key_len: key.len() as u8,
+                value_len: value.len() as u16,
+                crc32: crc32(value),
+                valid: 0x01,
+            };
+        } else {
+            // No space — rotate to next sector
+            self.active_sector = (self.active_sector + 1) % KV_SECTORS;
+            entries = [KvEntry::EMPTY; FLASH_SECTOR_SIZE / size_of::<KvEntry>()];
+            entries[0].key[..key.len()].copy_from_slice(key);
+            entries[0].value[..value.len()].copy_from_slice(value);
+            entries[0].header = KvEntryHeader {
+                key_len: key.len() as u8,
+                value_len: value.len() as u16,
+                crc32: crc32(value),
+                valid: 0x01,
+            };
+        }
+
+        // Erase and write active sector
+        let sector_addr = self.sector_addr(self.active_sector);
+        self.flash.erase(sector_addr as u32, FLASH_SECTOR_SIZE as u32).await?;
+        let bytes: &[u8] = unsafe {
+            slice::from_raw_parts(entries.as_ptr() as *const u8, FLASH_SECTOR_SIZE)
+        };
+        self.flash.program(sector_addr as u32, bytes).await?;
+        Ok(())
+    }
+}
+
+// ==== Main ====
+#[embassy_executor::main]
+async fn main(_spawner: Spawner) {
+    let p = embassy_rp::init(Default::default());
+    let flash = Flash::new(p.FLASH);
+    let mut kv = KvStore::new(flash);
+
+    // Store values
+    kv.set(b"wifi_ssid", b"MyNetwork").await.unwrap();
+    kv.set(b"wifi_pass", b"Secret123").await.unwrap();
+
+    // Retrieve values
+    if let Some(ssid) = kv.get(b"wifi_ssid") {
+        defmt::info!("SSID: {}", core::str::from_utf8(ssid).unwrap_or("<invalid>"));
+    }
+    if let Some(pass) = kv.get(b"wifi_pass") {
+        defmt::info!("PASS: {}", core::str::from_utf8(pass).unwrap_or("<invalid>"));
+    }
+
+    loop {
+        Timer::after_millis(2000).await;
+    }
+}
+Multiple sectors (KV_SECTORS) → spreads writes across sectors for wear leveling.
+Variable-length values → up to MAX_VALUE_SIZE.
+CRC32 integrity check → detects corruption.
+Sector rotation → when full, moves to next sector.
+Safe async API → no
+

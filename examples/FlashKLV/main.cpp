@@ -1,6 +1,6 @@
 #include <Arduino.h>
 
-#include <FlashKLV.h>
+#include <FlashKlv.h>
 
 #include <array>
 #include <boards/pico.h>
@@ -13,9 +13,9 @@ const uintptr_t codeStart = (uintptr_t) &__flash_binary_start;
 const uintptr_t codeEnd = (uintptr_t) &__flash_binary_end;
 const uintptr_t codeSize = codeEnd - codeStart;
 
-// create a FlashKLV object
+// create a FlashKlv object
 enum { SECTOR_COUNT = 4 };
-static FlashKLV flashKLV(SECTOR_COUNT);
+static FlashKlv flashKLV(SECTOR_COUNT);
 
 enum { CONFIG_KEY_A = 0x0A };
 enum { CONFIG_KEY_B = 0x0B };
@@ -60,23 +60,23 @@ void setup()
     Serial.println();
 
     const uint32_t sectorsAvailable = (PICO_FLASH_SIZE_BYTES - codeSize) / FLASH_SECTOR_SIZE;
-    Serial.println("Number of sectors available for FlashKLV: 0x" + String(sectorsAvailable, HEX) + "("+String(sectorsAvailable, DEC) + ")");
+    Serial.println("Number of sectors available for FlashKlv: 0x" + String(sectorsAvailable, HEX) + "("+String(sectorsAvailable, DEC) + ")");
     Serial.println();
 
-    Serial.println("FlashPtr: 0x" + String(reinterpret_cast<uint32_t>(flashKLV.getCurrentBankMemoryPtr()), HEX));
-    Serial.println("FlashPtr-XIP: 0x" + String(reinterpret_cast<uint32_t>(flashKLV.getCurrentBankMemoryPtr()) - XIP_BASE, HEX));
+    Serial.println("FlashPtr: 0x" + String(reinterpret_cast<uint32_t>(flashKLV.get_current_bankMemory_ptr()), HEX));
+    Serial.println("FlashPtr-XIP: 0x" + String(reinterpret_cast<uint32_t>(flashKLV.get_current_bankMemory_ptr()) - XIP_BASE, HEX));
     Serial.println("Offset: 0x" + String(PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE*SECTOR_COUNT, HEX));
     Serial.println();
 
     Serial.println("FlashSize: 0x" + String(PICO_FLASH_SIZE_BYTES, HEX));
 
-    flashKLV.eraseSector(0);
+    flashKLV.erase_sector(0);
 
     enum { MEMORY_DISPLAY_SIZE = 36 };
-    printBuf(flashKLV.getCurrentBankMemoryPtr(), MEMORY_DISPLAY_SIZE);
+    printBuf(flashKLV.get_current_bankMemory_ptr(), MEMORY_DISPLAY_SIZE);
 
     // stop writing
-    if (flashKLV.findFirstFreePos() < 24) {
+    if (flashKLV.find_first_free_pos() < 24) {
         const config_t configA1 = { .a = 0xAAAA, .b =0xBB, .c = 0xCC };
         const config_t configA2 = { .a = 0xCCCC, .b =0xDD, .c = 0xEE };
         const config_t configB  = { .a = 0x1111, .b =0x22, .c = 0x33 };
@@ -85,27 +85,27 @@ void setup()
         Serial.println("****WRITE****");
         int32_t err = flashKLV.write(CONFIG_KEY_A, sizeof(configA1), &configA1);
         Serial.println("write err = " + String(err, DEC));
-        printBuf(flashKLV.getCurrentBankMemoryPtr(), MEMORY_DISPLAY_SIZE);
+        printBuf(flashKLV.get_current_bankMemory_ptr(), MEMORY_DISPLAY_SIZE);
 
         delay(100);
         // write configA2, overwriting config A1
         Serial.println("****WRITE****");
         err = flashKLV.write(CONFIG_KEY_A, sizeof(configA2), &configA2);
         Serial.println("write err = " + String(err, DEC));
-        printBuf(flashKLV.getCurrentBankMemoryPtr(), MEMORY_DISPLAY_SIZE);
+        printBuf(flashKLV.get_current_bankMemory_ptr(), MEMORY_DISPLAY_SIZE);
 
         delay(100);
         Serial.println("****WRITE****");
         err = flashKLV.write(CONFIG_KEY_B, sizeof(configB), &configB);
         Serial.println("write err = " + String(err, DEC));
-        printBuf(flashKLV.getCurrentBankMemoryPtr(), MEMORY_DISPLAY_SIZE);
+        printBuf(flashKLV.get_current_bankMemory_ptr(), MEMORY_DISPLAY_SIZE);
 
         delay(100);
         // write configA1, overwriting config A2
         Serial.println("****WRITE****");
         err = flashKLV.write(CONFIG_KEY_A, sizeof(configA1), &configA1);
         Serial.println("write err = " + String(err, DEC));
-        printBuf(flashKLV.getCurrentBankMemoryPtr(), MEMORY_DISPLAY_SIZE);
+        printBuf(flashKLV.get_current_bankMemory_ptr(), MEMORY_DISPLAY_SIZE);
     }
 
     delay(100);

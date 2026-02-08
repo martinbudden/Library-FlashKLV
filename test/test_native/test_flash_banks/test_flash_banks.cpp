@@ -1,4 +1,4 @@
-#include <FlashKLV.h>
+#include <FlashKlv.h>
 #include <unity.h>
 
 #include <array>
@@ -15,9 +15,9 @@ void tearDown()
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers,cppcoreguidelines-avoid-non-const-global-variables,cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-type-reinterpret-cast,hicpp-signed-bitwise,readability-identifier-length,readability-magic-numbers,altera-struct-pack-align)
 enum { SECTOR_COUNT = 2 };
-enum { BANKB_OFFSET = FlashKLV::SECTOR_SIZE*SECTOR_COUNT };
-static std::array<uint8_t, FlashKLV::SECTOR_SIZE*SECTOR_COUNT> flashMemory;
-static std::array<uint8_t, FlashKLV::SECTOR_SIZE*SECTOR_COUNT*2> flashMemory2Banks;
+enum { BANKB_OFFSET = FlashKlv::SECTOR_SIZE*SECTOR_COUNT };
+static std::array<uint8_t, FlashKlv::SECTOR_SIZE*SECTOR_COUNT> flashMemory;
+static std::array<uint8_t, FlashKlv::SECTOR_SIZE*SECTOR_COUNT*2> flashMemory2Banks;
 
 // for FRAMEWORK_TEST, PAGE_SIZE = 8
 
@@ -38,150 +38,150 @@ struct record4B_t {
 void test_one_bank()
 {
     flashMemory.fill(0);
-    FlashKLV flashKLV(&flashMemory[0], SECTOR_COUNT);
-    flashKLV.eraseCurrentBank();
+    FlashKlv flashKLV(&flashMemory[0], SECTOR_COUNT);
+    flashKLV.erase_current_bank();
 
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(FlashKLV::SECTOR_SIZE*SECTOR_COUNT - 1));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(0));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(1));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(2));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(3));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(4));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(5));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(6));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(7));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(8));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(FlashKlv::SECTOR_SIZE*SECTOR_COUNT - 1));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(0));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(1));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(2));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(3));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(4));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(5));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(6));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(7));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(8));
 
-    TEST_ASSERT_EQUAL(flashKLV.memorySize(), flashKLV.bytesFree());
+    TEST_ASSERT_EQUAL(flashKLV.memory_size(), flashKLV.bytes_free());
 }
 
 void test_two_banks()
 {
     flashMemory2Banks.fill(0);
-    FlashKLV flashKLV(&flashMemory2Banks[0], SECTOR_COUNT, FlashKLV::TWO_BANKS);
-    TEST_ASSERT_EQUAL(flashKLV.getCurrentBankMemoryPtr() + BANKB_OFFSET, flashKLV.getOtherBankMemoryPtr());
-    TEST_ASSERT_EQUAL(false, flashKLV.isCurrentBankErased());
-    TEST_ASSERT_EQUAL(false, flashKLV.isOtherBankErased());
+    FlashKlv flashKLV(&flashMemory2Banks[0], SECTOR_COUNT, FlashKlv::TWO_BANKS);
+    TEST_ASSERT_EQUAL(flashKLV.get_current_bankMemory_ptr() + BANKB_OFFSET, flashKLV.get_other_bank_memory_ptr());
+    TEST_ASSERT_EQUAL(false, flashKLV.is_current_bankErased());
+    TEST_ASSERT_EQUAL(false, flashKLV.is_other_bankErased());
 
-    flashKLV.eraseCurrentBank();
-    TEST_ASSERT_EQUAL(true, flashKLV.isCurrentBankErased());
-    TEST_ASSERT_EQUAL(flashKLV.memorySize(), flashKLV.bytesFree());
+    flashKLV.erase_current_bank();
+    TEST_ASSERT_EQUAL(true, flashKLV.is_current_bankErased());
+    TEST_ASSERT_EQUAL(flashKLV.memory_size(), flashKLV.bytes_free());
 
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(0));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(8));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(FlashKLV::SECTOR_SIZE*SECTOR_COUNT - 1));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(0));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(8));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(FlashKlv::SECTOR_SIZE*SECTOR_COUNT - 1));
 
-    TEST_ASSERT_EQUAL(0x00, flashKLV.flashPeek(BANKB_OFFSET));
-    TEST_ASSERT_EQUAL(0x00, flashKLV.flashPeek(BANKB_OFFSET + 8));
-    TEST_ASSERT_EQUAL(0x00, flashKLV.flashPeek(2*FlashKLV::SECTOR_SIZE*SECTOR_COUNT - 1));
+    TEST_ASSERT_EQUAL(0x00, flashKLV.flash_peek(BANKB_OFFSET));
+    TEST_ASSERT_EQUAL(0x00, flashKLV.flash_peek(BANKB_OFFSET + 8));
+    TEST_ASSERT_EQUAL(0x00, flashKLV.flash_peek(2*FlashKlv::SECTOR_SIZE*SECTOR_COUNT - 1));
 }
 
 void test_copy_1()
 {
     flashMemory2Banks.fill(0);
-    FlashKLV flashKLV(&flashMemory2Banks[0], SECTOR_COUNT, FlashKLV::TWO_BANKS);
-    TEST_ASSERT_EQUAL(flashKLV.getCurrentBankMemoryPtr() + BANKB_OFFSET, flashKLV.getOtherBankMemoryPtr());
-    flashKLV.eraseCurrentBank();
+    FlashKlv flashKLV(&flashMemory2Banks[0], SECTOR_COUNT, FlashKlv::TWO_BANKS);
+    TEST_ASSERT_EQUAL(flashKLV.get_current_bankMemory_ptr() + BANKB_OFFSET, flashKLV.get_other_bank_memory_ptr());
+    flashKLV.erase_current_bank();
 
     int err {};
     record4A_t record4A {};
 
     record4A.value = 0x7B536AFE;
     err = flashKLV.write(record4A.key, record4A.length, &record4A.value);
-    TEST_ASSERT_EQUAL(FlashKLV::OK, err);
-    TEST_ASSERT_EQUAL(flashKLV.memorySize() - 6, flashKLV.bytesFree());
-    TEST_ASSERT_EQUAL(false, flashKLV.isRecordEmpty(0));
-    TEST_ASSERT_EQUAL(0x14, flashKLV.getRecordKey(0));
-    TEST_ASSERT_EQUAL(4, flashKLV.getRecordLength(0));
-    TEST_ASSERT_EQUAL(6, flashKLV.getRecordPositionIncrement(0));
-    TEST_ASSERT_EQUAL_PTR(&flashMemory2Banks[2], flashKLV.getRecordValuePtr(0));
+    TEST_ASSERT_EQUAL(FlashKlv::OK, err);
+    TEST_ASSERT_EQUAL(flashKLV.memory_size() - 6, flashKLV.bytes_free());
+    TEST_ASSERT_EQUAL(false, flashKLV.is_record_empty(0));
+    TEST_ASSERT_EQUAL(0x14, flashKLV.get_record_key(0));
+    TEST_ASSERT_EQUAL(4, flashKLV.get_record_length(0));
+    TEST_ASSERT_EQUAL(6, flashKLV.get_record_position_increment(0));
+    TEST_ASSERT_EQUAL_PTR(&flashMemory2Banks[2], flashKLV.get_record_value_ptr(0));
 
-    TEST_ASSERT_EQUAL(0x14 | TOP_BIT, flashKLV.flashPeek(0));
-    TEST_ASSERT_EQUAL(0x04, flashKLV.flashPeek(1));
-    TEST_ASSERT_EQUAL(0xFE, flashKLV.flashPeek(2));
-    TEST_ASSERT_EQUAL(0x6A, flashKLV.flashPeek(3));
-    TEST_ASSERT_EQUAL(0x53, flashKLV.flashPeek(4));
-    TEST_ASSERT_EQUAL(0x7B, flashKLV.flashPeek(5));
+    TEST_ASSERT_EQUAL(0x14 | TOP_BIT, flashKLV.flash_peek(0));
+    TEST_ASSERT_EQUAL(0x04, flashKLV.flash_peek(1));
+    TEST_ASSERT_EQUAL(0xFE, flashKLV.flash_peek(2));
+    TEST_ASSERT_EQUAL(0x6A, flashKLV.flash_peek(3));
+    TEST_ASSERT_EQUAL(0x53, flashKLV.flash_peek(4));
+    TEST_ASSERT_EQUAL(0x7B, flashKLV.flash_peek(5));
 
-    TEST_ASSERT_EQUAL(false, flashKLV.isOtherBankErased());
-    flashKLV.eraseOtherBank();
-    TEST_ASSERT_EQUAL(true, flashKLV.isOtherBankErased());
-    TEST_ASSERT_EQUAL(true, flashKLV.isOtherBankErased());
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeekOther(0));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeekOther(1));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeekOther(2));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeekOther(3));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeekOther(4));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeekOther(5));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeekOther(6));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeekOther(7));
+    TEST_ASSERT_EQUAL(false, flashKLV.is_other_bankErased());
+    flashKLV.erase_other_bank();
+    TEST_ASSERT_EQUAL(true, flashKLV.is_other_bankErased());
+    TEST_ASSERT_EQUAL(true, flashKLV.is_other_bankErased());
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek_other(0));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek_other(1));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek_other(2));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek_other(3));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek_other(4));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek_other(5));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek_other(6));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek_other(7));
 
     TEST_ASSERT_EQUAL(512*2, BANKB_OFFSET);
-    err = flashKLV.copyRecordsToOtherBankAndSwapBanks();
-    TEST_ASSERT_EQUAL(FlashKLV::OK, err);
+    err = flashKLV.copy_records_to_other_bank_and_swap_banks();
+    TEST_ASSERT_EQUAL(FlashKlv::OK, err);
     // check first sector of other bank erased after copy
-    TEST_ASSERT_EQUAL(true, flashKLV.isSectorErasedOtherBank(0));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeekOther(0));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeekOther(1));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeekOther(2));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeekOther(3));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeekOther(4));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeekOther(5));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeekOther(6));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeekOther(7));
+    TEST_ASSERT_EQUAL(true, flashKLV.is_sector_erased_other_bank(0));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek_other(0));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek_other(1));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek_other(2));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek_other(3));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek_other(4));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek_other(5));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek_other(6));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek_other(7));
 
     // BANK_HEADER =  { 0xFF, 0xFE, 0x04, 0x00, 0x01, 0x02, 0x03, 0x05 };
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(0));
-    TEST_ASSERT_EQUAL(0xFE, flashKLV.flashPeek(1));
-    TEST_ASSERT_EQUAL(0x04, flashKLV.flashPeek(2));
-    TEST_ASSERT_EQUAL(0x00, flashKLV.flashPeek(3));
-    TEST_ASSERT_EQUAL(0xF1, flashKLV.flashPeek(4));
-    TEST_ASSERT_EQUAL(0xF2, flashKLV.flashPeek(5));
-    TEST_ASSERT_EQUAL(0xF3, flashKLV.flashPeek(6));
-    TEST_ASSERT_EQUAL(0xF4, flashKLV.flashPeek(7));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(0));
+    TEST_ASSERT_EQUAL(0xFE, flashKLV.flash_peek(1));
+    TEST_ASSERT_EQUAL(0x04, flashKLV.flash_peek(2));
+    TEST_ASSERT_EQUAL(0x00, flashKLV.flash_peek(3));
+    TEST_ASSERT_EQUAL(0xF1, flashKLV.flash_peek(4));
+    TEST_ASSERT_EQUAL(0xF2, flashKLV.flash_peek(5));
+    TEST_ASSERT_EQUAL(0xF3, flashKLV.flash_peek(6));
+    TEST_ASSERT_EQUAL(0xF4, flashKLV.flash_peek(7));
 
-    TEST_ASSERT_EQUAL(0x14 | TOP_BIT, flashKLV.flashPeek(8));
-    TEST_ASSERT_EQUAL(0x04, flashKLV.flashPeek(9));
-    TEST_ASSERT_EQUAL(0xFE, flashKLV.flashPeek(10));
-    TEST_ASSERT_EQUAL(0x6A, flashKLV.flashPeek(11));
-    TEST_ASSERT_EQUAL(0x53, flashKLV.flashPeek(12));
-    TEST_ASSERT_EQUAL(0x7B, flashKLV.flashPeek(13));
+    TEST_ASSERT_EQUAL(0x14 | TOP_BIT, flashKLV.flash_peek(8));
+    TEST_ASSERT_EQUAL(0x04, flashKLV.flash_peek(9));
+    TEST_ASSERT_EQUAL(0xFE, flashKLV.flash_peek(10));
+    TEST_ASSERT_EQUAL(0x6A, flashKLV.flash_peek(11));
+    TEST_ASSERT_EQUAL(0x53, flashKLV.flash_peek(12));
+    TEST_ASSERT_EQUAL(0x7B, flashKLV.flash_peek(13));
 
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(14));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(15));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(14));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(15));
 
-    FlashKLV flashKLV_B(&flashMemory2Banks[0], SECTOR_COUNT, FlashKLV::TWO_BANKS);
-    TEST_ASSERT_EQUAL(flashKLV_B.getOtherBankMemoryPtr() + BANKB_OFFSET, flashKLV_B.getCurrentBankMemoryPtr());
+    FlashKlv flashKLV_B(&flashMemory2Banks[0], SECTOR_COUNT, FlashKlv::TWO_BANKS);
+    TEST_ASSERT_EQUAL(flashKLV_B.get_other_bank_memory_ptr() + BANKB_OFFSET, flashKLV_B.get_current_bankMemory_ptr());
 
-    flashKLV.eraseOtherBank();
-    err = flashKLV.copyRecordsToOtherBankAndSwapBanks();
-    TEST_ASSERT_EQUAL(FlashKLV::OK, err);
-    TEST_ASSERT_EQUAL(true, flashKLV.isSectorErasedOtherBank(0));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(0));
-    TEST_ASSERT_EQUAL(0xFE, flashKLV.flashPeek(1));
-    TEST_ASSERT_EQUAL(0x04, flashKLV.flashPeek(2));
-    TEST_ASSERT_EQUAL(0x00, flashKLV.flashPeek(3));
-    TEST_ASSERT_EQUAL(0xF1, flashKLV.flashPeek(4));
-    TEST_ASSERT_EQUAL(0xF2, flashKLV.flashPeek(5));
-    TEST_ASSERT_EQUAL(0xF3, flashKLV.flashPeek(6));
-    TEST_ASSERT_EQUAL(0xF4, flashKLV.flashPeek(7));
+    flashKLV.erase_other_bank();
+    err = flashKLV.copy_records_to_other_bank_and_swap_banks();
+    TEST_ASSERT_EQUAL(FlashKlv::OK, err);
+    TEST_ASSERT_EQUAL(true, flashKLV.is_sector_erased_other_bank(0));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(0));
+    TEST_ASSERT_EQUAL(0xFE, flashKLV.flash_peek(1));
+    TEST_ASSERT_EQUAL(0x04, flashKLV.flash_peek(2));
+    TEST_ASSERT_EQUAL(0x00, flashKLV.flash_peek(3));
+    TEST_ASSERT_EQUAL(0xF1, flashKLV.flash_peek(4));
+    TEST_ASSERT_EQUAL(0xF2, flashKLV.flash_peek(5));
+    TEST_ASSERT_EQUAL(0xF3, flashKLV.flash_peek(6));
+    TEST_ASSERT_EQUAL(0xF4, flashKLV.flash_peek(7));
 
-    TEST_ASSERT_EQUAL(0x14 | TOP_BIT, flashKLV.flashPeek(8));
-    TEST_ASSERT_EQUAL(0x04, flashKLV.flashPeek(9));
-    TEST_ASSERT_EQUAL(0xFE, flashKLV.flashPeek(10));
-    TEST_ASSERT_EQUAL(0x6A, flashKLV.flashPeek(11));
-    TEST_ASSERT_EQUAL(0x53, flashKLV.flashPeek(12));
-    TEST_ASSERT_EQUAL(0x7B, flashKLV.flashPeek(13));
+    TEST_ASSERT_EQUAL(0x14 | TOP_BIT, flashKLV.flash_peek(8));
+    TEST_ASSERT_EQUAL(0x04, flashKLV.flash_peek(9));
+    TEST_ASSERT_EQUAL(0xFE, flashKLV.flash_peek(10));
+    TEST_ASSERT_EQUAL(0x6A, flashKLV.flash_peek(11));
+    TEST_ASSERT_EQUAL(0x53, flashKLV.flash_peek(12));
+    TEST_ASSERT_EQUAL(0x7B, flashKLV.flash_peek(13));
 
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(14));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(15));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(14));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(15));
 }
 
 void test_copy_2()
 {
     flashMemory2Banks.fill(0);
-    FlashKLV flashKLV(&flashMemory2Banks[0], SECTOR_COUNT, FlashKLV::TWO_BANKS);
-    flashKLV.eraseCurrentBank();
+    FlashKlv flashKLV(&flashMemory2Banks[0], SECTOR_COUNT, FlashKlv::TWO_BANKS);
+    flashKLV.erase_current_bank();
 
     int err {};
     record4A_t record4A {};
@@ -189,94 +189,94 @@ void test_copy_2()
 
     record4A.value = 0x1A2B3C4D;
     err = flashKLV.write(record4A.key, record4A.length, &record4A.value);
-    TEST_ASSERT_EQUAL(FlashKLV::OK, err);
-    TEST_ASSERT_EQUAL(flashKLV.memorySize() - 6, flashKLV.bytesFree());
-    TEST_ASSERT_EQUAL(false, flashKLV.isRecordEmpty(0));
-    TEST_ASSERT_EQUAL(0x14, flashKLV.getRecordKey(0));
-    TEST_ASSERT_EQUAL(4, flashKLV.getRecordLength(0));
-    TEST_ASSERT_EQUAL(6, flashKLV.getRecordPositionIncrement(0));
-    TEST_ASSERT_EQUAL_PTR(&flashMemory2Banks[2], flashKLV.getRecordValuePtr(0));
+    TEST_ASSERT_EQUAL(FlashKlv::OK, err);
+    TEST_ASSERT_EQUAL(flashKLV.memory_size() - 6, flashKLV.bytes_free());
+    TEST_ASSERT_EQUAL(false, flashKLV.is_record_empty(0));
+    TEST_ASSERT_EQUAL(0x14, flashKLV.get_record_key(0));
+    TEST_ASSERT_EQUAL(4, flashKLV.get_record_length(0));
+    TEST_ASSERT_EQUAL(6, flashKLV.get_record_position_increment(0));
+    TEST_ASSERT_EQUAL_PTR(&flashMemory2Banks[2], flashKLV.get_record_value_ptr(0));
 
-    TEST_ASSERT_EQUAL(0x14 | TOP_BIT, flashKLV.flashPeek(0));
-    TEST_ASSERT_EQUAL(0x04, flashKLV.flashPeek(1));
-    TEST_ASSERT_EQUAL(0x4D, flashKLV.flashPeek(2));
-    TEST_ASSERT_EQUAL(0x3C, flashKLV.flashPeek(3));
-    TEST_ASSERT_EQUAL(0x2B, flashKLV.flashPeek(4));
-    TEST_ASSERT_EQUAL(0x1A, flashKLV.flashPeek(5));
+    TEST_ASSERT_EQUAL(0x14 | TOP_BIT, flashKLV.flash_peek(0));
+    TEST_ASSERT_EQUAL(0x04, flashKLV.flash_peek(1));
+    TEST_ASSERT_EQUAL(0x4D, flashKLV.flash_peek(2));
+    TEST_ASSERT_EQUAL(0x3C, flashKLV.flash_peek(3));
+    TEST_ASSERT_EQUAL(0x2B, flashKLV.flash_peek(4));
+    TEST_ASSERT_EQUAL(0x1A, flashKLV.flash_peek(5));
 
     record4A.value = 0x0ABBCCDD;
     err = flashKLV.write(record4A.key, record4A.length, &record4A.value);
-    TEST_ASSERT_EQUAL(FlashKLV::OK, err);
-    TEST_ASSERT_EQUAL(0x14 | TOP_BIT, flashKLV.flashPeek(6));
-    TEST_ASSERT_EQUAL(0x04, flashKLV.flashPeek(7));
-    TEST_ASSERT_EQUAL(0xDD, flashKLV.flashPeek(8));
-    TEST_ASSERT_EQUAL(0xCC, flashKLV.flashPeek(9));
-    TEST_ASSERT_EQUAL(0xBB, flashKLV.flashPeek(10));
-    TEST_ASSERT_EQUAL(0x0A, flashKLV.flashPeek(11));
+    TEST_ASSERT_EQUAL(FlashKlv::OK, err);
+    TEST_ASSERT_EQUAL(0x14 | TOP_BIT, flashKLV.flash_peek(6));
+    TEST_ASSERT_EQUAL(0x04, flashKLV.flash_peek(7));
+    TEST_ASSERT_EQUAL(0xDD, flashKLV.flash_peek(8));
+    TEST_ASSERT_EQUAL(0xCC, flashKLV.flash_peek(9));
+    TEST_ASSERT_EQUAL(0xBB, flashKLV.flash_peek(10));
+    TEST_ASSERT_EQUAL(0x0A, flashKLV.flash_peek(11));
 
     record4B.value = 0x11223344;
     err = flashKLV.write(record4B.key, record4B.length, &record4B.value);
-    TEST_ASSERT_EQUAL(FlashKLV::OK, err);
-    TEST_ASSERT_GREATER_OR_EQUAL(FlashKLV::OK, err);
-    TEST_ASSERT_EQUAL(0x24 | TOP_BIT, flashKLV.flashPeek(12));
-    TEST_ASSERT_EQUAL(0x04, flashKLV.flashPeek(13));
-    TEST_ASSERT_EQUAL(0x44, flashKLV.flashPeek(14));
-    TEST_ASSERT_EQUAL(0x33, flashKLV.flashPeek(15));
-    TEST_ASSERT_EQUAL(0x22, flashKLV.flashPeek(16));
-    TEST_ASSERT_EQUAL(0x11, flashKLV.flashPeek(17));
+    TEST_ASSERT_EQUAL(FlashKlv::OK, err);
+    TEST_ASSERT_GREATER_OR_EQUAL(FlashKlv::OK, err);
+    TEST_ASSERT_EQUAL(0x24 | TOP_BIT, flashKLV.flash_peek(12));
+    TEST_ASSERT_EQUAL(0x04, flashKLV.flash_peek(13));
+    TEST_ASSERT_EQUAL(0x44, flashKLV.flash_peek(14));
+    TEST_ASSERT_EQUAL(0x33, flashKLV.flash_peek(15));
+    TEST_ASSERT_EQUAL(0x22, flashKLV.flash_peek(16));
+    TEST_ASSERT_EQUAL(0x11, flashKLV.flash_peek(17));
 
-    TEST_ASSERT_EQUAL(false, flashKLV.isOtherBankErased());
-    flashKLV.eraseOtherBank();
-    TEST_ASSERT_EQUAL(true, flashKLV.isOtherBankErased());
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeekOther(0));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeekOther(1));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeekOther(2));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeekOther(3));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeekOther(4));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeekOther(5));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeekOther(6));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeekOther(7));
+    TEST_ASSERT_EQUAL(false, flashKLV.is_other_bankErased());
+    flashKLV.erase_other_bank();
+    TEST_ASSERT_EQUAL(true, flashKLV.is_other_bankErased());
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek_other(0));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek_other(1));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek_other(2));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek_other(3));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek_other(4));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek_other(5));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek_other(6));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek_other(7));
 
     TEST_ASSERT_EQUAL(512*2, BANKB_OFFSET);
-    err = flashKLV.copyRecordsToOtherBankAndSwapBanks();
-    TEST_ASSERT_EQUAL(FlashKLV::OK, err);
-    TEST_ASSERT_EQUAL(true, flashKLV.isSectorErasedOtherBank(0));
+    err = flashKLV.copy_records_to_other_bank_and_swap_banks();
+    TEST_ASSERT_EQUAL(FlashKlv::OK, err);
+    TEST_ASSERT_EQUAL(true, flashKLV.is_sector_erased_other_bank(0));
     // BANK_HEADER =  { 0xFF, 0xFE, 0x04, 0x00, 0xF1, 0xF2, 0xF3, 0xF4 };
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(0));
-    TEST_ASSERT_EQUAL(0xFE, flashKLV.flashPeek(1));
-    TEST_ASSERT_EQUAL(0x04, flashKLV.flashPeek(2));
-    TEST_ASSERT_EQUAL(0x00, flashKLV.flashPeek(3));
-    TEST_ASSERT_EQUAL(0xF1, flashKLV.flashPeek(4));
-    TEST_ASSERT_EQUAL(0xF2, flashKLV.flashPeek(5));
-    TEST_ASSERT_EQUAL(0xF3, flashKLV.flashPeek(6));
-    TEST_ASSERT_EQUAL(0xF4, flashKLV.flashPeek(7));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(0));
+    TEST_ASSERT_EQUAL(0xFE, flashKLV.flash_peek(1));
+    TEST_ASSERT_EQUAL(0x04, flashKLV.flash_peek(2));
+    TEST_ASSERT_EQUAL(0x00, flashKLV.flash_peek(3));
+    TEST_ASSERT_EQUAL(0xF1, flashKLV.flash_peek(4));
+    TEST_ASSERT_EQUAL(0xF2, flashKLV.flash_peek(5));
+    TEST_ASSERT_EQUAL(0xF3, flashKLV.flash_peek(6));
+    TEST_ASSERT_EQUAL(0xF4, flashKLV.flash_peek(7));
     // check first sector of other bank erased after copy
-    TEST_ASSERT_EQUAL(true, flashKLV.isSectorErasedOtherBank(0));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeekOther(0));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeekOther(1));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeekOther(2));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeekOther(3));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeekOther(4));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeekOther(5));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeekOther(6));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeekOther(7));
+    TEST_ASSERT_EQUAL(true, flashKLV.is_sector_erased_other_bank(0));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek_other(0));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek_other(1));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek_other(2));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek_other(3));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek_other(4));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek_other(5));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek_other(6));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek_other(7));
 
-    TEST_ASSERT_EQUAL(0x14 | TOP_BIT, flashKLV.flashPeek(8));
-    TEST_ASSERT_EQUAL(0x04, flashKLV.flashPeek(9));
-    TEST_ASSERT_EQUAL(0xDD, flashKLV.flashPeek(10));
-    TEST_ASSERT_EQUAL(0xCC, flashKLV.flashPeek(11));
-    TEST_ASSERT_EQUAL(0xBB, flashKLV.flashPeek(12));
-    TEST_ASSERT_EQUAL(0x0A, flashKLV.flashPeek(13));
+    TEST_ASSERT_EQUAL(0x14 | TOP_BIT, flashKLV.flash_peek(8));
+    TEST_ASSERT_EQUAL(0x04, flashKLV.flash_peek(9));
+    TEST_ASSERT_EQUAL(0xDD, flashKLV.flash_peek(10));
+    TEST_ASSERT_EQUAL(0xCC, flashKLV.flash_peek(11));
+    TEST_ASSERT_EQUAL(0xBB, flashKLV.flash_peek(12));
+    TEST_ASSERT_EQUAL(0x0A, flashKLV.flash_peek(13));
 
-    TEST_ASSERT_EQUAL(0x24 | TOP_BIT, flashKLV.flashPeek(14));
-    TEST_ASSERT_EQUAL(0x04, flashKLV.flashPeek(15));
-    TEST_ASSERT_EQUAL(0x44, flashKLV.flashPeek(16));
-    TEST_ASSERT_EQUAL(0x33, flashKLV.flashPeek(17));
-    TEST_ASSERT_EQUAL(0x22, flashKLV.flashPeek(18));
-    TEST_ASSERT_EQUAL(0x11, flashKLV.flashPeek(19));
+    TEST_ASSERT_EQUAL(0x24 | TOP_BIT, flashKLV.flash_peek(14));
+    TEST_ASSERT_EQUAL(0x04, flashKLV.flash_peek(15));
+    TEST_ASSERT_EQUAL(0x44, flashKLV.flash_peek(16));
+    TEST_ASSERT_EQUAL(0x33, flashKLV.flash_peek(17));
+    TEST_ASSERT_EQUAL(0x22, flashKLV.flash_peek(18));
+    TEST_ASSERT_EQUAL(0x11, flashKLV.flash_peek(19));
 
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(20));
-    TEST_ASSERT_EQUAL(0xFF, flashKLV.flashPeek(21));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(20));
+    TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(21));
 }
 
 // NOLINTEND(cppcoreguidelines-avoid-magic-numbers,cppcoreguidelines-avoid-non-const-global-variables,cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-type-reinterpret-cast,hicpp-signed-bitwise,readability-identifier-length,readability-magic-numbers,altera-struct-pack-align)
