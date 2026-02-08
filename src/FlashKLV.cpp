@@ -44,6 +44,7 @@ int flash_safe_execute(void (*fn)(void*), void* param, uint32_t timeout_ms) { (v
 #include <pico/flash.h>
 #endif
 
+// NOLINTBEGIN(cppcoreguidelines-avoid-c-arrays, hicpp-avoid-c-arrays,modernize-avoid-c-arrays)
 
 /*!
 If bankCount == 1 then we have one bank of flash at
@@ -788,3 +789,4 @@ void FlashKlv::flash_write_page(size_t page_index, uint8_t flash_memory_slice[])
 
 #endif // FRAMEWORK
 }
+// NOLINTEND(cppcoreguidelines-avoid-c-arrays, hicpp-avoid-c-arrays,modernize-avoid-c-arrays)
