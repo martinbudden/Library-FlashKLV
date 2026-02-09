@@ -174,7 +174,7 @@ void test_klv()
     TEST_ASSERT_EQUAL(0x2B81, flashKLV.get_record_key(0));
     TEST_ASSERT_EQUAL(4, flashKLV.get_record_length(0));
     TEST_ASSERT_EQUAL(8, flashKLV.get_record_position_increment(0));
-    //!!TEST_ASSERT_EQUAL_PTR(&flashMemory[4], flashKLV.get_record_value_ptr_x(0));
+    TEST_ASSERT_EQUAL_PTR(4, flashKLV.get_record_value_pos(0));
 
     klv = flashKLV.find(recordA.key);
     TEST_ASSERT_EQUAL(recordA.key, klv.key);

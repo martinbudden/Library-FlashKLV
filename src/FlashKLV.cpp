@@ -490,7 +490,7 @@ Erase an entire bank of flash, erasing in sector sized chunks.
 */
 int32_t FlashKlv::erase_bank(std::span<uint8_t>& flash_bank_memory_slice) // NOLINT(readability-make-member-function-const)
 {
-    const size_t bank_sector_count = _flash_base_memory_slice.size_bytes() / SECTOR_SIZE;
+    const size_t bank_sector_count = _bank_memory_size / SECTOR_SIZE;
     for (size_t ii = 0; ii < bank_sector_count; ++ii) {
         erase_sector(ii, flash_bank_memory_slice);
     }
