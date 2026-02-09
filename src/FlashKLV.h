@@ -107,22 +107,16 @@ public:
 
     klv_t find_x(uint16_t key) const;
     klp_t find(uint16_t key) const;
-    //klv_t find_next_x(size_t pos) const;
     klp_t find_next(size_t pos) const;
     size_t find_first_free_pos() const;
     record_count_t count_records() const;
     int32_t copy_records_to_other_bank_and_swap_banks();
-    //int32_t read_x(void* value, size_t size,  uint16_t key) const;
+
     int32_t read(std::span<uint8_t>& data, uint16_t key) const;
 
     int32_t remove(uint16_t key) { return remove(key, _current_bank_memory_slice); }
 
     int32_t write_key_value(uint16_t key, const std::span<const uint8_t>& value) { return write_key_value_slice(key, value, _current_bank_memory_slice); }
-
-    // old style writes, remove after test code updated
-    //int32_t write_slice(uint16_t key, uint16_t length, const uint8_t* value_ptr) { return write_klv_slice(key, length, value_ptr, _current_bank_memory_slice); }
-    //int32_t write(uint16_t key, uint16_t length, const void* value_ptr) { return write_slice(key, length, static_cast<const uint8_t*>(value_ptr)); }
-    //int32_t write_klv(const klv_t& klv) { return write(klv.key, klv.length, klv.value_ptr); }
 
     bool is_current_bank_erased() const  { return is_bank_erased(_current_bank_memory_slice); }
     bool is_other_bank_erased() const  { return is_bank_erased(_other_bank_memory_slice); }
@@ -141,7 +135,6 @@ protected:
     static int32_t erase_sector(size_t sector, std::span<uint8_t>& flash_bank_memory_slice);
 
     int32_t remove(uint16_t key, std::span<uint8_t>& flash_memory_slice);
-    //int32_t write_klv_slice(uint16_t key, uint16_t length, const uint8_t* value_ptr, std::span<uint8_t>& flash_memory_slice);
     int32_t write_key_value_slice(uint16_t key, const std::span<const uint8_t>& value, std::span<uint8_t>& flash_memory_slice);
     void flash_mark_record_as_deleted(size_t pos, std::span<uint8_t>& flash_bank_memory_slice);
     void flash_write_x(size_t pos, uint16_t length, const uint8_t* value_ptr, std::span<uint8_t>& flash_memory_slice);

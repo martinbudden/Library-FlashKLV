@@ -84,12 +84,6 @@ For RP2350 it is typically 4MB
 #endif
 {
 }
-
-FlashKlv::FlashKlv(uint8_t flash_memory_slice[], size_t sectors_per_bank) :
-    FlashKlv(flash_memory_slice, sectors_per_bank, ONE_BANK) {}
-
-FlashKlv::FlashKlv(size_t sectors_per_bank) :
-    FlashKlv(sectors_per_bank, ONE_BANK) {}
 */
 
 uint8_t FlashKlv::calculate_crc(uint8_t crc, uint8_t value)
@@ -147,24 +141,7 @@ bool FlashKlv::is_slice_overwriteable(const uint8_t* flash_ptr, const std::span<
     return true;
 }
 
-// NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-/*bool FlashKlv::is_slice_overwriteable_x(const uint8_t* flash_ptr, const uint8_t* value_ptr, uint16_t length)
-{
-    for (size_t ii = 0; ii < length; ++ ii) {
-        const uint8_t flash = *flash_ptr++;
-        const uint8_t value = *value_ptr++;
-
-        for (uint8_t bit = 0x80; bit !=0; bit >>= 1U) { // NOLINT(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
-            if (((flash & bit) == 0) && ((value & bit) == bit)) {
-                return false;
-            }
-        }
-    }
-    return true;
-}*/
-
 uint16_t FlashKlv::get_record_key_slice(size_t pos, const std::span<const uint8_t>& flash_memory_slice)
-//get_record_key_slice(size_t pos, const uint8_t flash_memory_slice[])
 {
     const uint8_t key8 = flash_memory_slice[pos];
     if ((key8 & UNDELETED_BIT) == 0) {
@@ -340,30 +317,6 @@ Find the next undeleted record with any key, starting at pos.
 
 Find always searches the current bank.
 */
-/*FlashKlv::klv_t FlashKlv::find_next_x(size_t pos) const
-{
-    // skip over the record at pos
-    uint16_t flash_record_key = get_record_key(pos);
-    if (is_empty(flash_record_key)) {
-        return klv_t {.key = NOT_FOUND, .length = 0, .value_ptr = nullptr};
-    }
-    pos += get_record_position_increment(pos);
-
-    // now walk the flash to find the next undeleted record
-    flash_record_key = get_record_key(pos);
-    while (!is_empty(flash_record_key)) {
-        if (flash_record_key != RECORD_KEY_DELETED) {
-            return klv_t {.key = flash_record_key, .length = get_record_length(pos), .value_ptr = get_record_value_ptr_x(pos)};
-        }
-        pos += get_record_position_increment(pos);
-        if (pos >= _bank_memory_size) {
-            return klv_t {.key = NOT_FOUND, .length = 0, .value_ptr = nullptr};
-        }
-        flash_record_key = get_record_key(pos);
-    }
-    return klv_t {.key = NOT_FOUND, .length = 0, .value_ptr = nullptr};
-}*/
-
 FlashKlv::klp_t FlashKlv::find_next(size_t pos) const
 {
     // skip over the record at pos
@@ -473,27 +426,6 @@ Read the record with the given key.
 
 Read always reads the current bank.
 */
-/*int32_t FlashKlv::read_x(void* value, size_t size, uint16_t key) const
-{
-    if (!key_ok(key)) {
-        return ERROR_INVALID_KEY;
-    }
-
-    const FlashKlv::klv_t klv = find_x(key);
-    if (klv.key == NOT_FOUND) {
-        return ERROR_NOT_FOUND;
-    }
-    if (klv.length > size) {
-        memcpy(value, klv.value_ptr, size);
-        return ERROR_RECORD_TOO_LARGE;
-    }
-    memcpy(value, klv.value_ptr, klv.length);
-    if (klv.length < size) {
-        return ERROR_RECORD_TOO_SMALL;
-    }
-    return OK;
-}*/
-
 int32_t FlashKlv::read(std::span<uint8_t>& data, uint16_t key) const
 {
     if (!key_ok(key)) {
@@ -523,50 +455,6 @@ Write a record
 
 Write to either the current bank or the other bank, as defined by flash_memory_slice.
 */
-/*int32_t FlashKlv::write_klv_slice(uint16_t key, uint16_t length, const uint8_t* value_ptr, std::span<uint8_t>& flash_memory_slice) // NOLINT(readability-make-member-function-const)
-{
-    if (!key_ok(key)) {
-        return ERROR_INVALID_KEY;
-    }
-
-    size_t pos = 0;
-    size_t delete_pos = NO_DELETE;
-
-    // look for an empty position to write the new record
-    uint16_t flash_record_key = get_record_key(pos);
-    while (!is_empty(flash_record_key)) {
-        if (flash_record_key == key) {
-            // there is already a record of this key, so first check if can be reused
-            if (get_record_length(pos) == length) {
-                // new record is same length as old, so check if it has changed
-                if (!memcmp(get_record_value_ptr_x(pos), value_ptr, length)) {
-                    // record has not changed, so no need to write it
-                    return OK_NO_NEED_TO_WRITE;
-                }
-                // record has changed, so check if it can the be overwritten, that is bits are only flipped from 1 to 0, never from 0 to 1
-                if (overwrite_records() && is_slice_overwriteable(get_record_value_ptr_x(pos), value_ptr, length)) {
-                    // just overwrite the value: key and length are unchanged
-                    flash_write(pos + (((flash_memory_slice[pos] & KL16_BIT) == 0) ? sizeof(kl8_t) : sizeof(kl16_t)), length, value_ptr, flash_memory_slice); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-                    return OK_OVERWRITTEN;
-                }
-            }
-            // record has changed, so save the old one's position for later deletion and continue looking for empty position
-            delete_pos = pos;
-        }
-
-        pos += get_record_position_increment(pos);
-        if (pos + length > _bank_memory_size) {
-            // not enough space for the new record
-            return ERROR_FLASH_FULL;
-        }
-        flash_record_key = get_record_key(pos);
-    }
-
-    // we've found an empty position, so write the record there
-    flash_delete_and_write(delete_pos, pos, key, length, value_ptr, flash_memory_slice);
-    return OK;
-}*/
-
 int32_t FlashKlv::write_key_value_slice(uint16_t key, const std::span<const uint8_t>& value, std::span<uint8_t>& flash_memory_slice)
 {
     if (!key_ok(key)) {
