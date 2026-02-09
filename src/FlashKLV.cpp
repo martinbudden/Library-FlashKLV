@@ -53,7 +53,7 @@ BANK_A address: flash_memory_slice, size: SECTOR_SIZE*sectors_per_bank
 BANK_B address: flash_memory_slice + SECTOR_SIZE*sectors_per_bank, size: SECTOR_SIZE*sectors_per_bank
 */
 
-FlashKlv::FlashKlv(std::span<uint8_t> flash_base_memory_slice, size_t bank_count) :
+FlashKlv::FlashKlv(std::span<uint8_t> flash_base_memory_slice, size_t bank_count) : // NOLINT(cppcoreguidelines-pro-type-member-init,hicpp-member-init)
     _flash_base_memory_slice(flash_base_memory_slice),
     _current_bank_memory_slice(flash_base_memory_slice.data(), flash_base_memory_slice.size_bytes() / bank_count),
     _other_bank_memory_slice(flash_base_memory_slice.data() + flash_base_memory_slice.size_bytes() / bank_count, flash_base_memory_slice.size_bytes() / bank_count),
@@ -243,7 +243,7 @@ int32_t FlashKlv::remove(uint16_t key, std::span<uint8_t>& flash_memory_slice)
     }
 
     size_t pos = 0;
-    uint16_t flash_record_key = get_record_key_slice(pos, flash_memory_slice);
+    uint16_t flash_record_key = get_record_key_slice(pos, flash_memory_slice); // NOLINT(cppcoreguidelines-init-variables)
     while (!is_empty(flash_record_key)) {
         if (flash_record_key == key) {
             flash_mark_record_as_deleted(pos, flash_memory_slice);
@@ -473,17 +473,16 @@ int32_t FlashKlv::write_klv_slice(uint16_t key, uint16_t length, const uint8_t* 
     return OK;
 }
 
-int32_t FlashKlv::write_key_value_slice(const flash_key_value_t& key_value, std::span<uint8_t>& flash_memory_slice)
+int32_t FlashKlv::write_key_value_slice(uint16_t key, const std::span<const uint8_t>& value, std::span<uint8_t>& flash_memory_slice)
 {
-    const uint16_t key = key_value.key;
-    if (!key_ok(key_value.key)) {
+    if (!key_ok(key)) {
         return ERROR_INVALID_KEY;
     }
 
     size_t pos = 0;
     size_t delete_pos = NO_DELETE;
-    const uint16_t length = static_cast<uint16_t>(key_value.value.size_bytes());
-    const uint8_t* value_ptr = key_value.value.data();
+    const auto length = static_cast<uint16_t>(value.size_bytes());
+    const auto* value_ptr = value.data();
 
     // look for an empty position to write the new record
     uint16_t flash_record_key = get_record_key(pos);

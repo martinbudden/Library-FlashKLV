@@ -26,12 +26,14 @@ struct record3_t {
     uint16_t key = 0x13;
     uint16_t length = LENGTH;
     std::array<uint8_t, LENGTH> value {};
+    std::span<uint8_t> span {value};
 };
 
 struct record4_t {
     uint16_t key = 0x14;
     uint16_t length = sizeof(int32_t);
     int32_t value = 0;
+    std::span<const uint8_t> span{reinterpret_cast<uint8_t*>(&value), sizeof(value)};
 };
 
 struct record7_t {
@@ -39,6 +41,7 @@ struct record7_t {
     uint16_t key = 0x17;
     uint16_t length = LENGTH;
     std::array<uint8_t, LENGTH> value {};
+    std::span<uint8_t> span {value};
 };
 
 struct record12_t {
@@ -46,6 +49,7 @@ struct record12_t {
     uint16_t key = 0x12;
     uint16_t length = LENGTH;
     std::array<uint8_t, LENGTH> value {};
+    std::span<uint8_t> span {value};
 };
 
 struct record23_t {
@@ -53,6 +57,7 @@ struct record23_t {
     uint16_t key = 0x23;
     uint16_t length = LENGTH;
     std::array<uint8_t, LENGTH> value {};
+    std::span<uint8_t> span {value};
 };
 
 void test_klv8_keys()
@@ -148,7 +153,8 @@ void test_klv8()
     TEST_ASSERT_EQUAL(nullptr, klv.value_ptr);
 
     record4A.value = 0x7B536AFE;
-    err = flashKLV.write(record4A.key, record4A.length, &record4A.value);
+    //err = flashKLV.write(record4A.key, record4A.length, &record4A.value);
+    err = flashKLV.write_key_value(record4A.key, record4A.span);
     TEST_ASSERT_EQUAL(FlashKlv::OK, err);
     TEST_ASSERT_EQUAL(flashKLV.memory_size() - 6, flashKLV.bytes_free());
 
@@ -179,7 +185,8 @@ void test_klv8()
     TEST_ASSERT_EQUAL(record4A.value, value);
 
     // write the same value again, so should not be written and be in same position
-    err = flashKLV.write(record4A.key, record4A.length, &record4A.value);
+    //err = flashKLV.write(record4A.key, record4A.length, &record4A.value);
+    err = flashKLV.write_key_value(record4A.key, record4A.span);
     TEST_ASSERT_EQUAL(FlashKlv::OK_NO_NEED_TO_WRITE, err);
 
     TEST_ASSERT_EQUAL(0x14 | TOP_BIT, flashKLV.flash_peek(0));
@@ -208,7 +215,8 @@ void test_klv8()
 
     // a value of 0x7B536A00 will allow the record to be overwritten
     record4A.value = 0x7B536A00;
-    err = flashKLV.write(record4A.key, record4A.length, &record4A.value);
+    //err = flashKLV.write(record4A.key, record4A.length, &record4A.value);
+    err = flashKLV.write_key_value(record4A.key, record4A.span);
     TEST_ASSERT_EQUAL(FlashKlv::OK_OVERWRITTEN, err);
     TEST_ASSERT_EQUAL(flashKLV.memory_size() - 6, flashKLV.bytes_free());
 
@@ -238,7 +246,8 @@ void test_klv8()
 
     // a value of 0x0C0B0AFE will will require the record to be marked as deleted and a new record written
     record4A.value = 0x0C0B0AFE;
-    err = flashKLV.write(record4A.key, record4A.length, &record4A.value);
+    //err = flashKLV.write(record4A.key, record4A.length, &record4A.value);
+    err = flashKLV.write_key_value(record4A.key, record4A.span);
     TEST_ASSERT_EQUAL(FlashKlv::OK, err);
     TEST_ASSERT_EQUAL(flashKLV.memory_size() - 12, flashKLV.bytes_free());
 
@@ -282,7 +291,9 @@ void test_config()
 
     // write the config structure to flash
     const config_t configW = { .a= 713, .b =27, .c = 12 };
-    int32_t err = flashKLV.write(CONFIG_KEY, sizeof(configW), &configW);
+    //int32_t err = flashKLV.write(CONFIG_KEY, sizeof(configW), &configW);
+    std::span<const uint8_t> span(reinterpret_cast<const uint8_t*>(&configW), sizeof(configW));
+    int32_t err = flashKLV.write_key_value(CONFIG_KEY, span);
     TEST_ASSERT_EQUAL(FlashKlv::OK, err);
 
     // read a config structure

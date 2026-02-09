@@ -114,11 +114,11 @@ public:
 
     int32_t remove(uint16_t key) { return remove(key, _current_bank_memory_slice); }
 
-    int32_t write_key_value(const flash_key_value_t& key_value) { return write_key_value_slice(key_value, _current_bank_memory_slice); }
+    int32_t write_key_value(uint16_t key, const std::span<const uint8_t>& value) { return write_key_value_slice(key, value, _current_bank_memory_slice); }
 
     // old style writes, remove after test code updated
-    int32_t write_slice(uint16_t key, uint16_t length, const uint8_t* value_ptr) { return write_klv_slice(key, length, value_ptr, _current_bank_memory_slice); }
-    int32_t write(uint16_t key, uint16_t length, const void* value_ptr) { return write_slice(key, length, static_cast<const uint8_t*>(value_ptr)); }
+    //int32_t write_slice(uint16_t key, uint16_t length, const uint8_t* value_ptr) { return write_klv_slice(key, length, value_ptr, _current_bank_memory_slice); }
+    //int32_t write(uint16_t key, uint16_t length, const void* value_ptr) { return write_slice(key, length, static_cast<const uint8_t*>(value_ptr)); }
     //int32_t write_klv(const klv_t& klv) { return write(klv.key, klv.length, klv.value_ptr); }
 
     bool is_current_bank_erased() const  { return is_bank_erased(_current_bank_memory_slice); }
@@ -139,7 +139,7 @@ protected:
 
     int32_t remove(uint16_t key, std::span<uint8_t>& flash_memory_slice);
     int32_t write_klv_slice(uint16_t key, uint16_t length, const uint8_t* value_ptr, std::span<uint8_t>& flash_memory_slice);
-    int32_t write_key_value_slice(const flash_key_value_t& key_value, std::span<uint8_t>& flash_memory_slice);
+    int32_t write_key_value_slice(uint16_t key, const std::span<const uint8_t>& value, std::span<uint8_t>& flash_memory_slice);
     void flash_mark_record_as_deleted(size_t pos, std::span<uint8_t>& flash_bank_memory_slice);
     void flash_write(size_t pos, uint16_t length, const uint8_t* value_ptr, std::span<uint8_t>& flash_memory_slice);
     void flash_delete_and_write(size_t delete_pos, size_t pos, uint16_t key, uint16_t length, const uint8_t* value_ptr, std::span<uint8_t>& flash_memory_slice);

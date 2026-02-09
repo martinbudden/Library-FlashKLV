@@ -35,14 +35,14 @@ struct record4_t {
     uint16_t key = 0x2B81;
     uint16_t length = sizeof(int32_t);
     int32_t value = 0;
-    std::span<const uint8_t> span{reinterpret_cast<uint8_t*>(&value), sizeof(value)};
+    std::span<const uint8_t> span{reinterpret_cast<const uint8_t*>(&value), sizeof(value)};
 };
 
 struct record400_t {
     uint16_t key = 0x0100;
     uint16_t length = sizeof(int32_t);
     int32_t value = 0;
-    std::span<const uint8_t> span{reinterpret_cast<uint8_t*>(&value), sizeof(value)};
+    std::span<const uint8_t> span{reinterpret_cast<const uint8_t*>(&value), sizeof(value)};
 };
 
 struct record7_t {
@@ -153,7 +153,7 @@ void test_klv()
     //err = flashKLV.write(recordA.key, recordA.length, &recordA.value);
     //std::span<const std::byte> span = std::as_bytes(std::span(&recordA.value, 1)); // span of std::byte
     //std::span<uint8_t> span(reinterpret_cast<uint8_t*>(&recordA.value), recordA.length);
-    err = flashKLV.write_key_value(flash_key_value_t{.value = recordA.span, .key = recordA.key});
+    err = flashKLV.write_key_value(recordA.key, recordA.span);
     TEST_ASSERT_EQUAL(FlashKlv::OK, err);
 
     TEST_ASSERT_EQUAL(0x2B | TOP_BITS, flashKLV.flash_peek(0));
@@ -182,7 +182,8 @@ void test_klv()
     TEST_ASSERT_EQUAL(recordA.value, value);
 
     // write the same value again, so should not be written and be in same position
-    err = flashKLV.write(recordA.key, recordA.length, &recordA.value);
+    //err = flashKLV.write(recordA.key, recordA.length, &recordA.value);
+    err = flashKLV.write_key_value(recordA.key, recordA.span);
     TEST_ASSERT_EQUAL(FlashKlv::OK_NO_NEED_TO_WRITE, err);
 
     TEST_ASSERT_EQUAL(0x2B | TOP_BITS, flashKLV.flash_peek(0));
@@ -208,7 +209,8 @@ void test_klv()
 
     // a value of 0x7B536A00 will allow the record to be overwritten
     recordA.value = 0x7B536A00;
-    err = flashKLV.write(recordA.key, recordA.length, &recordA.value);
+    //err = flashKLV.write(recordA.key, recordA.length, &recordA.value);
+    err = flashKLV.write_key_value(recordA.key, recordA.span);
     TEST_ASSERT_EQUAL(FlashKlv::OK_OVERWRITTEN, err);
 
     TEST_ASSERT_EQUAL(0x2B | TOP_BITS, flashKLV.flash_peek(0));
@@ -233,7 +235,8 @@ void test_klv()
 
     // a value of 0xFFFFwill will require the record to be marked as deleted and a new record written
     recordA.value = 0x0C0B0AFE;
-    err = flashKLV.write(recordA.key, recordA.length, &recordA.value);
+    //err = flashKLV.write(recordA.key, recordA.length, &recordA.value);
+    err = flashKLV.write_key_value(recordA.key, recordA.span);
     TEST_ASSERT_EQUAL(FlashKlv::OK, err);
 
     // old first record, marked as deleted
@@ -310,7 +313,8 @@ void test_klv2()
     TEST_ASSERT_EQUAL(nullptr, klv.value_ptr);
 
     recordA.value = 0x7B536AFE;
-    err = flashKLV.write(recordA.key, recordA.length, &recordA.value);
+    //err = flashKLV.write(recordA.key, recordA.length, &recordA.value);
+    err = flashKLV.write_key_value(recordA.key, recordA.span);
     TEST_ASSERT_EQUAL(FlashKlv::OK, err);
     TEST_ASSERT_EQUAL(0x0100, flashKLV.get_record_key(0));
     TEST_ASSERT_EQUAL(4, flashKLV.get_record_length(0));
@@ -335,7 +339,8 @@ void test_klv2()
     TEST_ASSERT_EQUAL(recordA.value, value);
 
     // write the same value again, so should not be written and be in same position
-    err = flashKLV.write(recordA.key, recordA.length, &recordA.value);
+    //err = flashKLV.write(recordA.key, recordA.length, &recordA.value);
+    err = flashKLV.write_key_value(recordA.key, recordA.span);
     TEST_ASSERT_EQUAL(FlashKlv::OK_NO_NEED_TO_WRITE, err);
     TEST_ASSERT_EQUAL(0x0100, flashKLV.get_record_key(0));
 
@@ -362,7 +367,8 @@ void test_klv2()
 
     // a value of 0x7B536A00 will allow the record to be overwritten
     recordA.value = 0x7B536A00;
-    err = flashKLV.write(recordA.key, recordA.length, &recordA.value);
+    //err = flashKLV.write(recordA.key, recordA.length, &recordA.value);
+    err = flashKLV.write_key_value(recordA.key, recordA.span);
     TEST_ASSERT_EQUAL(FlashKlv::OK_OVERWRITTEN, err);
 
     TEST_ASSERT_EQUAL(0x01 | TOP_BITS, flashKLV.flash_peek(0));
@@ -388,7 +394,8 @@ void test_klv2()
 
     // a value of 0xFFFFwill will require the record to be marked as deleted and a new record written
     recordA.value = 0x0C0B0AFE;
-    err = flashKLV.write(recordA.key, recordA.length, &recordA.value);
+    //err = flashKLV.write(recordA.key, recordA.length, &recordA.value);
+    err = flashKLV.write_key_value(recordA.key, recordA.span);
     TEST_ASSERT_EQUAL(FlashKlv::OK, err);
 
     // old first record, marked as deleted
@@ -452,7 +459,8 @@ void test_multi_page_records()
 
 // Write a record
     record12A.value = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 };
-    err = flashKLV.write(record12A.key, record12A.length, &record12A.value);
+    //err = flashKLV.write(record12A.key, record12A.length, &record12A.value);
+    err = flashKLV.write_key_value(record12A.key, record12A.span);
     TEST_ASSERT_EQUAL(FlashKlv::OK, err);
     TEST_ASSERT_EQUAL(0x3571, flashKLV.get_record_key(0));
     TEST_ASSERT_EQUAL(12, flashKLV.get_record_length(0));
@@ -486,7 +494,8 @@ void test_multi_page_records()
 
 // Overwrite record
     record12A.value = { 1, 0, 2, 4, 4, 6, 7, 0, 9, 2, 11, 12 };
-    err = flashKLV.write(record12A.key, record12A.length, &record12A.value);
+    //err = flashKLV.write(record12A.key, record12A.length, &record12A.value);
+    err = flashKLV.write_key_value(record12A.key, record12A.span);
     TEST_ASSERT_EQUAL(FlashKlv::OK_OVERWRITTEN, err);
     TEST_ASSERT_EQUAL(0x3571, flashKLV.get_record_key(0));
     TEST_ASSERT_EQUAL(12, flashKLV.get_record_length(0));
@@ -520,7 +529,8 @@ void test_multi_page_records()
 
 // Write new record
     record12A.value = { 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41 };
-    err = flashKLV.write(record12A.key, record12A.length, &record12A.value);
+    //err = flashKLV.write(record12A.key, record12A.length, &record12A.value);
+    err = flashKLV.write_key_value(record12A.key, record12A.span);
     TEST_ASSERT_EQUAL(FlashKlv::OK, err);
 
     // vestiges of old record
@@ -601,7 +611,7 @@ void test_length_3()
 // Write a record
     record3A.value = { 1, 2, 3 };
     //err = flashKLV.write(record3A.key, record3A.length, &record3A.value);
-    err = flashKLV.write_key_value(flash_key_value_t{.value = record3A.span, .key = record3A.key});
+    err = flashKLV.write_key_value(record3A.key, record3A.span);
     TEST_ASSERT_EQUAL(FlashKlv::OK, err);
     TEST_ASSERT_FALSE(flashKLV.is_record_empty(0));
     TEST_ASSERT_EQUAL(3, flashKLV.get_record_length(0));
@@ -628,7 +638,8 @@ void test_length_3()
 
 // Overwrite record
     record3A.value = { 1, 0, 2 };
-    err = flashKLV.write(record3A.key, record3A.length, &record3A.value);
+    //err = flashKLV.write(record3A.key, record3A.length, &record3A.value);
+    err = flashKLV.write_key_value(record3A.key, record3A.span);
     TEST_ASSERT_EQUAL(FlashKlv::OK_OVERWRITTEN, err);
     TEST_ASSERT_EQUAL(0x0329, flashKLV.get_record_key(0));
     TEST_ASSERT_EQUAL(3, flashKLV.get_record_length(0));
@@ -653,7 +664,8 @@ void test_length_3()
 
 // Write new record
     record3A.value = { 3, 5, 7 };
-    err = flashKLV.write(record3A.key, record3A.length, &record3A.value);
+    //err = flashKLV.write(record3A.key, record3A.length, &record3A.value);
+    err = flashKLV.write_key_value(record3A.key, record3A.span);
     TEST_ASSERT_EQUAL(FlashKlv::OK, err);
     TEST_ASSERT_EQUAL(0x03 | TOP_BITS, flashKLV.flash_peek(7));
 
@@ -715,7 +727,8 @@ void test_length_7()
 
 // Write a record
     record7A.value = { 1, 2, 3, 4, 5, 6, 7 };
-    err = flashKLV.write(record7A.key, record7A.length, &record7A.value);
+    //err = flashKLV.write(record7A.key, record7A.length, &record7A.value);
+    err = flashKLV.write_key_value(record7A.key, record7A.span);
     TEST_ASSERT_EQUAL(FlashKlv::OK, err);
 
     TEST_ASSERT_EQUAL(0x07 | TOP_BITS, flashKLV.flash_peek(0));
@@ -742,7 +755,8 @@ void test_length_7()
 
 // Overwrite record
     record7A.value = { 1, 0, 2, 4, 4, 6, 7 };
-    err = flashKLV.write(record7A.key, record7A.length, &record7A.value);
+    //err = flashKLV.write(record7A.key, record7A.length, &record7A.value);
+    err = flashKLV.write_key_value(record7A.key, record7A.span);
     TEST_ASSERT_EQUAL(FlashKlv::OK_OVERWRITTEN, err);
 
     TEST_ASSERT_EQUAL(0x07 | TOP_BITS, flashKLV.flash_peek(0));
@@ -769,7 +783,8 @@ void test_length_7()
 
 // Write new record
     record7A.value = { 3, 5, 7, 11, 13, 17, 19 };
-    err = flashKLV.write(record7A.key, record7A.length, &record7A.value);
+    //err = flashKLV.write(record7A.key, record7A.length, &record7A.value);
+    err = flashKLV.write_key_value(record7A.key, record7A.span);
     TEST_ASSERT_EQUAL(FlashKlv::OK, err);
 
     // vestiges of old record
@@ -837,7 +852,8 @@ void test_length_23()
 
 // Write a record
     record23A.value = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23 };
-    err = flashKLV.write(record23A.key, record23A.length, &record23A.value);
+    //err = flashKLV.write(record23A.key, record23A.length, &record23A.value);
+    err = flashKLV.write_key_value(record23A.key, record23A.span);
     TEST_ASSERT_EQUAL(FlashKlv::OK, err);
 
     TEST_ASSERT_EQUAL(0x23 | TOP_BITS, flashKLV.flash_peek(0));
@@ -881,7 +897,8 @@ void test_length_23()
 
 // Overwrite record
     record23A.value = { 1, 0, 2, 4, 4, 6, 7, 0, 9, 2, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23 };
-    err = flashKLV.write(record23A.key, record23A.length, &record23A.value);
+    //err = flashKLV.write(record23A.key, record23A.length, &record23A.value);
+    err = flashKLV.write_key_value(record23A.key, record23A.span);
     TEST_ASSERT_EQUAL(FlashKlv::OK_OVERWRITTEN, err);
 
     TEST_ASSERT_EQUAL(0x23 | TOP_BITS, flashKLV.flash_peek(0));
@@ -917,7 +934,8 @@ void test_length_23()
 
 // Write new record
     record23A.value = { 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 52, 63, 74, 85, 96, 107, 118, 139, 140, 151, 162 };
-    err = flashKLV.write(record23A.key, record23A.length, &record23A.value);
+    //err = flashKLV.write(record23A.key, record23A.length, &record23A.value);
+    err = flashKLV.write_key_value(record23A.key, record23A.span);
     TEST_ASSERT_EQUAL(FlashKlv::OK, err);
     TEST_ASSERT_EQUAL(0, flashKLV.flash_peek(0) & TOP_BIT);
 

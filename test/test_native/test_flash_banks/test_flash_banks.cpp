@@ -27,12 +27,14 @@ struct record4A_t {
     uint16_t key = 0x14;
     uint16_t length = sizeof(int32_t);
     int32_t value = 0;
+    std::span<const uint8_t> span{reinterpret_cast<const uint8_t*>(&value), sizeof(value)};
 };
 
 struct record4B_t {
     uint16_t key = 0x24;
     uint16_t length = sizeof(int32_t);
     int32_t value = 0;
+    std::span<const uint8_t> span{reinterpret_cast<const uint8_t*>(&value), sizeof(value)};
 };
 
 void test_one_bank()
@@ -87,7 +89,8 @@ void test_copy_1()
     record4A_t record4A {};
 
     record4A.value = 0x7B536AFE;
-    err = flashKLV.write(record4A.key, record4A.length, &record4A.value);
+    //err = flashKLV.write(record4A.key, record4A.length, &record4A.value);
+    err = flashKLV.write_key_value(record4A.key, record4A.span);
     TEST_ASSERT_EQUAL(FlashKlv::OK, err);
     TEST_ASSERT_EQUAL(flashKLV.memory_size() - 6, flashKLV.bytes_free());
     TEST_ASSERT_EQUAL(false, flashKLV.is_record_empty(0));
@@ -188,7 +191,8 @@ void test_copy_2()
     record4B_t record4B {};
 
     record4A.value = 0x1A2B3C4D;
-    err = flashKLV.write(record4A.key, record4A.length, &record4A.value);
+    //err = flashKLV.write(record4A.key, record4A.length, &record4A.value);
+    err = flashKLV.write_key_value(record4A.key, record4A.span);
     TEST_ASSERT_EQUAL(FlashKlv::OK, err);
     TEST_ASSERT_EQUAL(flashKLV.memory_size() - 6, flashKLV.bytes_free());
     TEST_ASSERT_EQUAL(false, flashKLV.is_record_empty(0));
@@ -205,7 +209,8 @@ void test_copy_2()
     TEST_ASSERT_EQUAL(0x1A, flashKLV.flash_peek(5));
 
     record4A.value = 0x0ABBCCDD;
-    err = flashKLV.write(record4A.key, record4A.length, &record4A.value);
+    //err = flashKLV.write(record4A.key, record4A.length, &record4A.value);
+    err = flashKLV.write_key_value(record4A.key, record4A.span);
     TEST_ASSERT_EQUAL(FlashKlv::OK, err);
     TEST_ASSERT_EQUAL(0x14 | TOP_BIT, flashKLV.flash_peek(6));
     TEST_ASSERT_EQUAL(0x04, flashKLV.flash_peek(7));
@@ -215,7 +220,8 @@ void test_copy_2()
     TEST_ASSERT_EQUAL(0x0A, flashKLV.flash_peek(11));
 
     record4B.value = 0x11223344;
-    err = flashKLV.write(record4B.key, record4B.length, &record4B.value);
+    //err = flashKLV.write(record4B.key, record4B.length, &record4B.value);
+    err = flashKLV.write_key_value(record4B.key, record4B.span);
     TEST_ASSERT_EQUAL(FlashKlv::OK, err);
     TEST_ASSERT_GREATER_OR_EQUAL(FlashKlv::OK, err);
     TEST_ASSERT_EQUAL(0x24 | TOP_BIT, flashKLV.flash_peek(12));
