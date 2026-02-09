@@ -124,7 +124,6 @@ void test_klv()
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(FlashKlv::SECTOR_SIZE*SECTOR_COUNT - 1));
 
     record4_t recordA {};
-    //FlashKlv::klv_t klv {};
     FlashKlv::klp_t klv {};
     int err {};
     uint32_t value {};
@@ -294,7 +293,7 @@ void test_klv2()
     int err {};
     uint32_t value {};
 
-    TEST_ASSERT_EQUAL(8, recordA.length + sizeof(FlashKlv::klv_t::key) + sizeof(FlashKlv::klv_t::length));
+    TEST_ASSERT_EQUAL(8, recordA.length + sizeof(FlashKlv::klp_t::key) + sizeof(FlashKlv::klp_t::length));
     klv = flashKLV.find(recordA.key);
     TEST_ASSERT_TRUE(klv.key == FlashKlv::NOT_FOUND);
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(0));
@@ -441,7 +440,7 @@ void test_multi_page_records()
     record12_t record12A {};
     TEST_ASSERT_EQUAL(true, FlashKlv::key_ok(record12A.key));
     TEST_ASSERT_EQUAL(0x3571, record12A.key);
-    TEST_ASSERT_EQUAL(16, record12A.length + sizeof(FlashKlv::klv_t::key) + sizeof(FlashKlv::klv_t::length));
+    TEST_ASSERT_EQUAL(16, record12A.length + sizeof(FlashKlv::klp_t::key) + sizeof(FlashKlv::klp_t::length));
 
     FlashKlv::klp_t klv {};
     int err {};
@@ -593,7 +592,7 @@ void test_length_3()
     record3_t record3A {};
     TEST_ASSERT_EQUAL(true, FlashKlv::key_ok(record3A.key));
     TEST_ASSERT_EQUAL(0x0329, record3A.key);
-    TEST_ASSERT_EQUAL(7, record3A.length + sizeof(FlashKlv::klv_t::key) + sizeof(FlashKlv::klv_t::length));
+    TEST_ASSERT_EQUAL(7, record3A.length + sizeof(FlashKlv::klp_t::key) + sizeof(FlashKlv::klp_t::length));
 
     FlashKlv::klp_t klv {};
     int err {};
@@ -710,9 +709,8 @@ void test_length_7()
     record7_t record7A {};
     TEST_ASSERT_EQUAL(true, FlashKlv::key_ok(record7A.key));
     TEST_ASSERT_EQUAL(0x0717, record7A.key);
-    TEST_ASSERT_EQUAL(11, record7A.length + sizeof(FlashKlv::klv_t::key) + sizeof(FlashKlv::klv_t::length));
+    TEST_ASSERT_EQUAL(11, record7A.length + sizeof(FlashKlv::klp_t::key) + sizeof(FlashKlv::klp_t::length));
 
-    //FlashKlv::klv_t klv {};
     FlashKlv::klp_t klv {};
     int err {};
 
@@ -836,7 +834,7 @@ void test_length_23()
     record23_t record23A {};
     TEST_ASSERT_EQUAL(true, FlashKlv::key_ok(record23A.key));
     TEST_ASSERT_EQUAL(0x2361, record23A.key);
-    TEST_ASSERT_EQUAL(27, record23A.length + sizeof(FlashKlv::klv_t::key) + sizeof(FlashKlv::klv_t::length));
+    TEST_ASSERT_EQUAL(27, record23A.length + sizeof(FlashKlv::klp_t::key) + sizeof(FlashKlv::klp_t::length));
 
     FlashKlv::klp_t klv {};
     int err {};

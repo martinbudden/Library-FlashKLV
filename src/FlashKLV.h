@@ -13,6 +13,9 @@ Currently only implemented on Raspberry Pi Pico platform.
 */
 class FlashKlv {
 public:
+    FlashKlv(std::span<uint8_t> flash_base_memory_slice, size_t bank_count);
+    ~FlashKlv() = default;
+public:
     static constexpr uint8_t ONE_BANK = 1;
     static constexpr uint8_t TWO_BANKS = 2;
 
@@ -55,15 +58,10 @@ public:
     static constexpr size_t SECTOR_SIZE = 4096;  //!< Minimum erasable amount, bytes.
     static constexpr size_t PAGE_SIZE = 256; //!< Minimum writable amount, bytes.
 #endif
-protected:
+private:
     enum : uint8_t { DELETED_MASK = 0x7F, UNDELETED_BIT = 0x80, KL16_BIT = 0x40 };
     enum { NO_DELETE = SIZE_MAX };
 public:
-    struct klv_t {
-        uint16_t key;
-        uint16_t length;
-        const uint8_t* value_ptr;
-    };
     struct klp_t {
         uint16_t key;
         uint16_t length;
@@ -81,7 +79,7 @@ public:
         size_t record_count;
         size_t deleted_record_count;
     };
-protected:
+private:
     struct erase_params_t {
         uint8_t* address;
         size_t count;
@@ -90,12 +88,6 @@ protected:
         uint8_t* address;
         uint8_t* data;
     };
-public:
-    FlashKlv(std::span<uint8_t> flash_base_memory_slice, size_t bank_count);
-    //FlashKlv(uint8_t* flash_memory_slice, size_t sectors_per_bank);
-    //FlashKlv(size_t sectors_per_bank, size_t bank_count);
-    //explicit FlashKlv(size_t sectors_per_bank);
-    ~FlashKlv() = default;
 public:
     static uint8_t calculate_crc(uint8_t crc, uint8_t value);
     static uint8_t calculate_crc_slice(uint8_t crc, const std::span<const uint8_t>& data);
@@ -127,7 +119,7 @@ public:
     bool overwrite_records() const { return _mode & OVERWRITE_RECORDS; }
     bool delete_records() const { return _mode & DELETE_RECORDS; }
     bool use_crc() const { return _mode & USE_CRC; }
-protected:
+private:
     static bool is_sector_erased(size_t sector, const std::span<const uint8_t>& flash_bank_memory_slice);
     bool is_bank_erased(const std::span<const uint8_t>& flash_bank_memory_slice) const;
     int32_t erase_bank(std::span<uint8_t>& flash_bank_memory_slice);
@@ -136,9 +128,7 @@ protected:
     int32_t remove(uint16_t key, std::span<uint8_t>& flash_memory_slice);
     int32_t write_key_value_slice(uint16_t key, const std::span<const uint8_t>& value, std::span<uint8_t>& flash_memory_slice);
     void flash_mark_record_as_deleted(size_t pos, std::span<uint8_t>& flash_bank_memory_slice);
-    void flash_write_x(size_t pos, uint16_t length, const uint8_t* value_ptr, std::span<uint8_t>& flash_memory_slice);
     void flash_write(size_t pos, const std::span<const uint8_t>& data, std::span<uint8_t>& flash_memory_slice);
-    void flash_delete_and_write_x(size_t delete_pos, size_t pos, uint16_t key, uint16_t length, const uint8_t* value_ptr, std::span<uint8_t>& flash_memory_slice);
     void flash_delete_and_write(size_t delete_pos, size_t pos, uint16_t key, const std::span<const uint8_t>& data, std::span<uint8_t>& flash_memory_slice);
     void flash_read_page_into_cache(size_t page_index, const std::span<const uint8_t>& flash_memory_slice);
     void flash_write_page(size_t page_index, std::span<uint8_t>& flash_memory_slice);
@@ -170,7 +160,7 @@ public:
     const std::span<uint8_t>& get_current_bank_memory_slice() const { return _current_bank_memory_slice; }
     const std::span<uint8_t>& get_other_bank_memory_slice() const { return _other_bank_memory_slice; }
     int32_t erase_sector(size_t sector) { return erase_sector(sector, _current_bank_memory_slice); }
-protected:
+private:
     std::span<uint8_t> _flash_base_memory_slice;
     std::span<uint8_t> _current_bank_memory_slice;
     std::span<uint8_t> _other_bank_memory_slice;

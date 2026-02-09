@@ -104,7 +104,7 @@ uint8_t FlashKlv::calculate_crc(uint8_t crc, uint8_t value)
 uint8_t FlashKlv::calculate_crc_slice(uint8_t crc, const std::span<const uint8_t>& data)
 {
     for (auto d: data) {
-        crc = calculate_crc(crc, d);
+        crc = calculate_crc(crc, d); // cppcheck-suppress useStlAlgorithm
     }
     return crc;
 }
@@ -126,16 +126,11 @@ bool FlashKlv::is_byte_overwriteable(uint8_t flash, uint8_t value)
 
 bool FlashKlv::is_slice_overwriteable(const uint8_t* flash_ptr, const std::span<const uint8_t>& data)
 {
-    const size_t length = data.size_bytes();
-    const uint8_t* value_ptr = data.data();
-    for (size_t ii = 0; ii < length; ++ ii) {
-        const uint8_t flash = *flash_ptr++;
-        const uint8_t value = *value_ptr++;
+    for (auto value : data) {
+        const uint8_t flash = *flash_ptr++; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 
-        for (uint8_t bit = 0x80; bit !=0; bit >>= 1U) { // NOLINT(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
-            if (((flash & bit) == 0) && ((value & bit) == bit)) {
-                return false;
-            }
+        if (!is_byte_overwriteable(flash, value)) {
+            return false;
         }
     }
     return true;
@@ -191,7 +186,6 @@ size_t FlashKlv::get_record_value_pos_slice(size_t pos, const std::span<const ui
     }
     return pos + sizeof(kl16_t);
 }
-// NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 
 bool FlashKlv::is_empty(uint16_t flash_record_key)
 {
@@ -445,7 +439,7 @@ int32_t FlashKlv::write_key_value_slice(uint16_t key, const std::span<const uint
                 // record has changed, so check if it can the be overwritten, that is bits are only flipped from 1 to 0, never from 0 to 1
                 if (overwrite_records() && is_slice_overwriteable(record_value_ptr, value)) {
                     // just overwrite the value: key and length are unchanged
-                    flash_write_x(pos + (((flash_memory_slice[pos] & KL16_BIT) == 0) ? sizeof(kl8_t) : sizeof(kl16_t)), length, value_ptr, flash_memory_slice); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+                    flash_write(pos + (((flash_memory_slice[pos] & KL16_BIT) == 0) ? sizeof(kl8_t) : sizeof(kl16_t)), value, flash_memory_slice); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
                     return OK_OVERWRITTEN;
                 }
             }
@@ -462,7 +456,7 @@ int32_t FlashKlv::write_key_value_slice(uint16_t key, const std::span<const uint
     }
 
     // we've found an empty position, so write the record there
-    flash_delete_and_write_x(delete_pos, pos, key, length, value_ptr, flash_memory_slice);
+    flash_delete_and_write(delete_pos, pos, key, value, flash_memory_slice);
     return OK;
 }
 
@@ -537,31 +531,6 @@ void FlashKlv::flash_read_page_into_cache(size_t page_index, const std::span<con
 /*!
 write the data at `value_ptr` to flash in page-sized chunks using `flash_write_page`
 */
-void FlashKlv::flash_write_x(size_t pos, uint16_t length, const uint8_t* value_ptr, std::span<uint8_t>& flash_memory_slice) // NOLINT(readability-convert-member-functions-to-static)
-{
-    while (length != 0) {
-        const size_t page_index = pos / PAGE_SIZE;
-        flash_read_page_into_cache(page_index, flash_memory_slice);
-
-        const size_t page_offset = pos - page_index*PAGE_SIZE;
-        const size_t bytes_to_end_of_page = PAGE_SIZE - page_offset;
-
-        if (length <= bytes_to_end_of_page) {
-            // everything can fit on the current page, so copy it and return
-            memcpy(&_page_cache[page_offset], value_ptr, length);
-            flash_write_page(page_index, flash_memory_slice);
-            return;
-        }
-        // copy what we have room for and then loop round for the next chunk
-        memcpy(&_page_cache[page_offset], value_ptr, bytes_to_end_of_page);
-        flash_write_page(page_index, flash_memory_slice);
-
-        pos += bytes_to_end_of_page;
-        value_ptr += bytes_to_end_of_page; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-        length -= static_cast<uint16_t>(bytes_to_end_of_page);
-    }
-}
-
 void FlashKlv::flash_write(size_t pos, const std::span<const uint8_t>& data, std::span<uint8_t>& flash_memory_slice)
 {
     size_t length = data.size_bytes();
@@ -593,76 +562,6 @@ void FlashKlv::flash_write(size_t pos, const std::span<const uint8_t>& data, std
 Mark the current instance of a record as deleted if `delete_pos != NO_DELETE` and then
 write the new record in page-sized chunks using `flash_write_page`
 */
-void FlashKlv::flash_delete_and_write_x(size_t delete_pos, size_t pos, uint16_t key, uint16_t length, const uint8_t* value_ptr, std::span<uint8_t>& flash_memory_slice) // NOLINT(readability-make-member-function-const)
-{
-    size_t page_index = pos / PAGE_SIZE; // NOLINT(misc-const-correctness)
-
-    const size_t deletepage_index = ((delete_pos == NO_DELETE) || !delete_records()) ? NO_DELETE : delete_pos / PAGE_SIZE;
-    if (delete_pos != NO_DELETE && deletepage_index != page_index) {
-        // there is a record to mark as deleted, and it is in a different page than the record being written
-        flash_mark_record_as_deleted(delete_pos, flash_memory_slice);
-    }
-
-    flash_read_page_into_cache(page_index, flash_memory_slice);
-    if (deletepage_index == page_index) {
-        // if there is a deleted record, then mark it as deleted
-        // note that delete_pos < pos, so there is no danger of this being overwritten
-        _page_cache[delete_pos - page_index*PAGE_SIZE] &= DELETED_MASK;
-    }
-
-    size_t page_offset = pos - page_index*PAGE_SIZE;
-    size_t bytes_to_end_of_page = PAGE_SIZE - page_offset;
-
-    if (key <= KEY8_MAX) {
-        key |= UNDELETED_BIT;
-    } else {
-        // reverse key byte order, this is done because and empty record is denoted by setting the high byte to zero.
-        key = (key << 8U) | (key >> 8U) | UNDELETED_BIT | KL16_BIT; // NOLINT(cppcoreguidelines-avoid-magic-numbers,hicpp-signed-bitwise,readability-magic-numbers)
-    }
-    const kl8_t key_length8 = { .key = static_cast<uint8_t>(key), .length = static_cast<uint8_t>(length) };
-    const kl16_t key_length16 = { .key = key, .length = length };
-    const auto* key_length_ptr = ((key&KL16_BIT) == 0) ? reinterpret_cast<const uint8_t*>(&key_length8) : reinterpret_cast<const uint8_t*>(&key_length16); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-    const size_t sizeof_key_length = ((key&KL16_BIT) == 0) ? sizeof(kl8_t) : sizeof(kl16_t);
-
-    // update the pageCache with key and length, dealing with the case where key and length span two pages
-    if (sizeof_key_length >= bytes_to_end_of_page) {
-        // key and length fill this page
-        // so copy up to the end of this page
-        memcpy(&_page_cache[page_offset], key_length_ptr, bytes_to_end_of_page);
-        flash_write_page(page_index++, flash_memory_slice);
-        flash_read_page_into_cache(page_index, flash_memory_slice);
-        if (sizeof_key_length > bytes_to_end_of_page) {
-            // key and length spill onto next page
-            // so copy the rest onto the next page
-            memcpy(&_page_cache[0], key_length_ptr + bytes_to_end_of_page, sizeof_key_length - bytes_to_end_of_page);
-        }
-    } else {
-        // key and length are contained within this page
-        memcpy(&_page_cache[page_offset], key_length_ptr, sizeof_key_length);
-    }
-
-    // now deal with the value
-    pos += sizeof_key_length;
-    page_offset = pos - page_index*PAGE_SIZE;
-    bytes_to_end_of_page = PAGE_SIZE - page_offset;
-    if (length <= bytes_to_end_of_page) {
-        // the whole of the rest of the record fits in this page
-        memcpy(&_page_cache[page_offset], value_ptr, length);
-        flash_write_page(page_index, flash_memory_slice);
-        return;
-    }
-
-    // copy the part of the record that fits on this page and write it
-    memcpy(&_page_cache[page_offset], value_ptr, bytes_to_end_of_page);
-    flash_write_page(page_index, flash_memory_slice);
-
-    // deal with the rest of the record
-    pos += bytes_to_end_of_page;
-    value_ptr += bytes_to_end_of_page; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-    length -= static_cast<uint16_t>(bytes_to_end_of_page);
-    flash_write_x(pos, length, value_ptr, flash_memory_slice);
-}
-
 void FlashKlv::flash_delete_and_write(size_t delete_pos, size_t pos, uint16_t key, const std::span<const uint8_t>& data, std::span<uint8_t>& flash_memory_slice) // NOLINT(readability-make-member-function-const)
 {
     size_t length = data.size_bytes();
