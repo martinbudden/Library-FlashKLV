@@ -13,6 +13,7 @@
         "ESPIDF",
         "GPIOS",
         "hicpp",
+        "klvp",
         "libc",
         "llvmlibc",
         "martinbudden",

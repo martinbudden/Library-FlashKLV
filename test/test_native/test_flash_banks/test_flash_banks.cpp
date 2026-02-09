@@ -97,7 +97,7 @@ void test_copy_1()
     TEST_ASSERT_EQUAL(0x14, flashKLV.get_record_key(0));
     TEST_ASSERT_EQUAL(4, flashKLV.get_record_length(0));
     TEST_ASSERT_EQUAL(6, flashKLV.get_record_position_increment(0));
-    //!!TEST_ASSERT_EQUAL_PTR(&flashMemory2Banks[2], flashKLV.get_record_value_ptr(0));
+    //!!TEST_ASSERT_EQUAL_PTR(&flashMemory2Banks[2], flashKLV.get_record_value_ptr_x(0));
 
     TEST_ASSERT_EQUAL(0x14 | TOP_BIT, flashKLV.flash_peek(0));
     TEST_ASSERT_EQUAL(0x04, flashKLV.flash_peek(1));
@@ -199,7 +199,7 @@ void test_copy_2()
     TEST_ASSERT_EQUAL(0x14, flashKLV.get_record_key(0));
     TEST_ASSERT_EQUAL(4, flashKLV.get_record_length(0));
     TEST_ASSERT_EQUAL(6, flashKLV.get_record_position_increment(0));
-    //!!TEST_ASSERT_EQUAL_PTR(&flashMemory2Banks[2], flashKLV.get_record_value_ptr(0));
+    //!!TEST_ASSERT_EQUAL_PTR(&flashMemory2Banks[2], flashKLV.get_record_value_ptr_x(0));
 
     TEST_ASSERT_EQUAL(0x14 | TOP_BIT, flashKLV.flash_peek(0));
     TEST_ASSERT_EQUAL(0x04, flashKLV.flash_peek(1));

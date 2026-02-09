@@ -6,12 +6,6 @@
 #include <span>
 
 
-struct flash_key_value_t {
-    std::span<const uint8_t> value;
-    //std::span<const std::byte> value;
-    uint16_t key;
-};
-
 /*!
 Flash Key Length Value (KLV) storage.
 
@@ -49,7 +43,8 @@ public:
     static constexpr uint16_t RECORD_KEY_EMPTY = 0xFFFF; 
     static constexpr uint16_t RECORD_KEY_BANK_HEADER = 0x3FFE;
     static constexpr uint16_t RECORD_KEY_DELETED = 0;
-    static constexpr uint16_t RECORD_EMPTY = 0xFF;    static constexpr uint8_t  KEY8_MIN = 0x01;
+    static constexpr uint16_t RECORD_EMPTY = 0xFF;
+    static constexpr uint8_t  KEY8_MIN = 0x01;
     static constexpr uint8_t  KEY8_MAX = 0x3F;
     static constexpr uint16_t KEY16_MIN = 0x0100;
     static constexpr uint16_t KEY16_MAX = 0x3FFD;
@@ -68,6 +63,11 @@ public:
         uint16_t key;
         uint16_t length;
         const uint8_t* value_ptr;
+    };
+    struct klp_t {
+        uint16_t key;
+        uint16_t length;
+        size_t value_pos;
     };
     struct kl8_t { // key and length for 8-bit KLV record
         uint8_t key;
@@ -98,19 +98,22 @@ public:
     ~FlashKlv() = default;
 public:
     static uint8_t calculate_crc(uint8_t crc, uint8_t value);
-    static uint8_t calculate_crc(uint8_t crc, const uint8_t *data, size_t length);
+    static uint8_t calculate_crc_slice(uint8_t crc, const std::span<const uint8_t>& data);
 
     static bool key_ok(uint16_t key) { return ((key >= KEY8_MIN && key <= KEY8_MAX) || (key >= KEY16_MIN && key <= KEY16_MAX)); }
 
     size_t bytes_free() const;
     size_t memory_size() const { return _bank_memory_size; }
 
-    klv_t find(uint16_t key) const;
-    klv_t find_next(size_t pos) const;
+    klv_t find_x(uint16_t key) const;
+    klp_t find(uint16_t key) const;
+    //klv_t find_next_x(size_t pos) const;
+    klp_t find_next(size_t pos) const;
     size_t find_first_free_pos() const;
     record_count_t count_records() const;
     int32_t copy_records_to_other_bank_and_swap_banks();
-    int32_t read(void* value, size_t size,  uint16_t key) const;
+    //int32_t read_x(void* value, size_t size,  uint16_t key) const;
+    int32_t read(std::span<uint8_t>& data, uint16_t key) const;
 
     int32_t remove(uint16_t key) { return remove(key, _current_bank_memory_slice); }
 
@@ -138,19 +141,21 @@ protected:
     static int32_t erase_sector(size_t sector, std::span<uint8_t>& flash_bank_memory_slice);
 
     int32_t remove(uint16_t key, std::span<uint8_t>& flash_memory_slice);
-    int32_t write_klv_slice(uint16_t key, uint16_t length, const uint8_t* value_ptr, std::span<uint8_t>& flash_memory_slice);
+    //int32_t write_klv_slice(uint16_t key, uint16_t length, const uint8_t* value_ptr, std::span<uint8_t>& flash_memory_slice);
     int32_t write_key_value_slice(uint16_t key, const std::span<const uint8_t>& value, std::span<uint8_t>& flash_memory_slice);
     void flash_mark_record_as_deleted(size_t pos, std::span<uint8_t>& flash_bank_memory_slice);
-    void flash_write(size_t pos, uint16_t length, const uint8_t* value_ptr, std::span<uint8_t>& flash_memory_slice);
-    void flash_delete_and_write(size_t delete_pos, size_t pos, uint16_t key, uint16_t length, const uint8_t* value_ptr, std::span<uint8_t>& flash_memory_slice);
-    void flash_read_page(size_t page_index, const std::span<const uint8_t>& flash_memory_slice);
+    void flash_write_x(size_t pos, uint16_t length, const uint8_t* value_ptr, std::span<uint8_t>& flash_memory_slice);
+    void flash_write(size_t pos, const std::span<const uint8_t>& data, std::span<uint8_t>& flash_memory_slice);
+    void flash_delete_and_write_x(size_t delete_pos, size_t pos, uint16_t key, uint16_t length, const uint8_t* value_ptr, std::span<uint8_t>& flash_memory_slice);
+    void flash_delete_and_write(size_t delete_pos, size_t pos, uint16_t key, const std::span<const uint8_t>& data, std::span<uint8_t>& flash_memory_slice);
+    void flash_read_page_into_cache(size_t page_index, const std::span<const uint8_t>& flash_memory_slice);
     void flash_write_page(size_t page_index, std::span<uint8_t>& flash_memory_slice);
 
     static bool is_record_empty_slice(size_t pos, const std::span<const uint8_t>& flash_memory_slice);
     static uint16_t get_record_key_slice(size_t pos, const std::span<const uint8_t>& flash_memory_slice);
     static uint16_t get_record_length_slice(size_t pos, const std::span<const uint8_t>& flash_memory_slice);
     static uint16_t get_record_position_increment_slice(size_t pos, const std::span<const uint8_t>& flash_memory_slice);
-    static const uint8_t* get_record_value_ptr_slice(size_t pos, const std::span<const uint8_t>& flash_memory_slice);
+    static const uint8_t* get_record_value_ptr_slice_x(size_t pos, const std::span<const uint8_t>& flash_memory_slice);
     static size_t get_record_value_pos_slice(size_t pos, const std::span<const uint8_t>& flash_memory_slice);
 
     static void call_flash_range_erase(void* param);
@@ -158,18 +163,18 @@ protected:
 public:
 // internal, exposed for testing
     static bool is_byte_overwriteable(uint8_t flash, uint8_t value);
-    static bool is_slice_overwriteable(const uint8_t* flash_ptr, const uint8_t* value_ptr, uint16_t length);
+    static bool is_slice_overwriteable(const uint8_t* flash_ptr, const std::span<const uint8_t>& data);
     bool is_record_empty(size_t pos) const { return is_record_empty_slice(pos, _current_bank_memory_slice); }
     static bool is_empty(uint16_t flash_record_key);
     uint16_t get_record_key(size_t pos) const { return get_record_key_slice(pos, _current_bank_memory_slice); }
     uint16_t get_record_length(size_t pos) const { return get_record_length_slice(pos, _current_bank_memory_slice); }
     uint16_t get_record_position_increment(size_t pos) const { return get_record_position_increment_slice(pos, _current_bank_memory_slice); }
-    const uint8_t* get_record_value_ptr(size_t pos) const { return get_record_value_ptr_slice(pos, _current_bank_memory_slice); }
+    const uint8_t* get_record_value_ptr_x(size_t pos) const { return get_record_value_ptr_slice_x(pos, _current_bank_memory_slice); }
     size_t get_record_value_pos(size_t pos) const { return get_record_value_pos_slice(pos, _current_bank_memory_slice); }
     int32_t copy_records_to_other_bank();
     void swap_banks() { std::span<uint8_t> temp = _other_bank_memory_slice; _other_bank_memory_slice = _current_bank_memory_slice; _current_bank_memory_slice = temp; }
 // for testing
-    //const uint8_t* flash_pos(size_t pos) { return _current_bank_memory_slice + pos; } //!< for testing
+    const uint8_t* flash_pos(size_t pos) { return _current_bank_memory_slice.data() + pos; } //!< for testing
     uint8_t flash_peek(size_t pos) { return _current_bank_memory_slice[pos]; } //!< for testing
     uint8_t flash_peek_other(size_t pos) { return _other_bank_memory_slice[pos]; } //!< for testing
     const std::span<uint8_t>& get_current_bank_memory_slice() const { return _current_bank_memory_slice; }

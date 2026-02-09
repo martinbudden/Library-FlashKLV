@@ -132,7 +132,7 @@ void test_klv8()
     TEST_ASSERT_EQUAL(flashKLV.memory_size(), flashKLV.bytes_free());
 
     TEST_ASSERT_EQUAL(6, record4A.length + sizeof(FlashKlv::kl8_t));
-    klv = flashKLV.find(record4A.key);
+    klv = flashKLV.find_x(record4A.key);
     TEST_ASSERT_TRUE(klv.key == FlashKlv::NOT_FOUND);
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(0));
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(1));
@@ -174,10 +174,10 @@ void test_klv8()
     TEST_ASSERT_EQUAL(0x14, flashKLV.get_record_key(0));
     TEST_ASSERT_EQUAL(4, flashKLV.get_record_length(0));
     TEST_ASSERT_EQUAL(6, flashKLV.get_record_position_increment(0));
-    TEST_ASSERT_EQUAL_PTR(&flashMemory[2], flashKLV.get_record_value_ptr(0));
+    TEST_ASSERT_EQUAL_PTR(&flashMemory[2], flashKLV.get_record_value_ptr_x(0));
 
     TEST_ASSERT_EQUAL(FlashKlv::OK, err);
-    klv = flashKLV.find(record4A.key);
+    klv = flashKLV.find_x(record4A.key);
     TEST_ASSERT_EQUAL(record4A.key, klv.key);
     TEST_ASSERT_EQUAL(record4A.length, klv.length);
      //!!TEST_ASSERT_EQUAL(flashKLV.flash_pos(2), klv.value_ptr);
@@ -204,9 +204,9 @@ void test_klv8()
     TEST_ASSERT_EQUAL(0x14, flashKLV.get_record_key(0));
     TEST_ASSERT_EQUAL(4, flashKLV.get_record_length(0));
     TEST_ASSERT_EQUAL(6, flashKLV.get_record_position_increment(0));
-    //!!TEST_ASSERT_EQUAL_PTR(flashKLV.flash_pos(2), flashKLV.get_record_value_ptr(0));
+    //!!TEST_ASSERT_EQUAL_PTR(flashKLV.flash_pos(2), flashKLV.get_record_value_ptr_x(0));
 
-    klv = flashKLV.find(record4A.key);
+    klv = flashKLV.find_x(record4A.key);
     TEST_ASSERT_EQUAL(record4A.key, klv.key);
     TEST_ASSERT_EQUAL(record4A.length, klv.length);
      //!!TEST_ASSERT_EQUAL(flashKLV.flash_pos(2), klv.value_ptr);
@@ -235,9 +235,9 @@ void test_klv8()
     TEST_ASSERT_EQUAL(0x14, flashKLV.get_record_key(0));
     TEST_ASSERT_EQUAL(4, flashKLV.get_record_length(0));
     TEST_ASSERT_EQUAL(6, flashKLV.get_record_position_increment(0));
-    TEST_ASSERT_EQUAL_PTR(&flashMemory[2], flashKLV.get_record_value_ptr(0));
+    TEST_ASSERT_EQUAL_PTR(&flashMemory[2], flashKLV.get_record_value_ptr_x(0));
 
-    klv = flashKLV.find(record4A.key);
+    klv = flashKLV.find_x(record4A.key);
     TEST_ASSERT_EQUAL(record4A.key, klv.key);
     TEST_ASSERT_EQUAL(record4A.length, klv.length);
     //!!TEST_ASSERT_EQUAL(flashKLV.flash_pos(2), klv.value_ptr);
@@ -268,7 +268,7 @@ void test_klv8()
     TEST_ASSERT_EQUAL(0x0C, flashKLV.flash_peek(11));
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(12)); // check byte after record still set to 0xFF
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(13));
-    klv = flashKLV.find(record4A.key);
+    klv = flashKLV.find_x(record4A.key);
     TEST_ASSERT_EQUAL(record4A.key, klv.key);
     TEST_ASSERT_EQUAL(record4A.length, klv.length);
     //!!TEST_ASSERT_EQUAL(flashKLV.flash_pos(8), klv.value_ptr);
@@ -282,26 +282,47 @@ void test_config()
     flashKLV.erase_current_bank();
 
     // declare a key and structure
-    enum { CONFIG_KEY = 0x01 };
+    static constexpr uint8_t CONFIG_KEY = 0x01;
     struct config_t {
         uint16_t a;
         uint8_t b;
         uint8_t c;
     };
+    TEST_ASSERT_EQUAL(4, sizeof(config_t));
 
     // write the config structure to flash
-    const config_t configW = { .a= 713, .b =27, .c = 12 };
+    const config_t configW = { .a= 0x02c9, .b =27, .c = 12 };
     //int32_t err = flashKLV.write(CONFIG_KEY, sizeof(configW), &configW);
-    std::span<const uint8_t> span(reinterpret_cast<const uint8_t*>(&configW), sizeof(configW));
-    int32_t err = flashKLV.write_key_value(CONFIG_KEY, span);
+    std::span<const uint8_t> spanW(reinterpret_cast<const uint8_t*>(&configW), sizeof(configW));
+    int32_t err = flashKLV.write_key_value(CONFIG_KEY, spanW);
     TEST_ASSERT_EQUAL(FlashKlv::OK, err);
+    TEST_ASSERT_EQUAL(CONFIG_KEY | TOP_BIT, flashKLV.flash_peek(0));
+    TEST_ASSERT_EQUAL(sizeof(config_t), flashKLV.flash_peek(1));
+    TEST_ASSERT_EQUAL(0xc9, flashKLV.flash_peek(2));
+    TEST_ASSERT_EQUAL(0x02, flashKLV.flash_peek(3));
+    TEST_ASSERT_EQUAL(27, flashKLV.flash_peek(4));
+    TEST_ASSERT_EQUAL(12, flashKLV.flash_peek(5));
 
     // read a config structure
     config_t configR {};
-    err = flashKLV.read(&configR, sizeof(configR), CONFIG_KEY);
+    std::span<uint8_t> spanR(reinterpret_cast<uint8_t*>(&configR), sizeof(configR));
+    TEST_ASSERT_EQUAL_PTR(&configR, spanR.data());
+    TEST_ASSERT_EQUAL(sizeof(configR), spanR.size_bytes());
+
+
+    const FlashKlv::klp_t klv = flashKLV.find(CONFIG_KEY);
+    TEST_ASSERT_EQUAL(CONFIG_KEY, klv.key);
+    TEST_ASSERT_EQUAL(sizeof(config_t), klv.length);
+    TEST_ASSERT_EQUAL(2, klv.value_pos);
+
+    err = flashKLV.read(spanR, CONFIG_KEY);
     TEST_ASSERT_EQUAL(FlashKlv::OK, err);
 
     // test the values are as expected
+    TEST_ASSERT_EQUAL(0xc9, spanR.data()[0]);
+    TEST_ASSERT_EQUAL(0x02, spanR.data()[1]);
+    TEST_ASSERT_EQUAL(27, spanR.data()[2]);
+    TEST_ASSERT_EQUAL(12, spanR.data()[3]);
     TEST_ASSERT_EQUAL(713, configR.a);
     TEST_ASSERT_EQUAL(27, configR.b);
     TEST_ASSERT_EQUAL(12, configR.c);
