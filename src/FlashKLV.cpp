@@ -183,14 +183,6 @@ uint16_t FlashKlv::get_record_position_increment_slice(size_t pos, const std::sp
     return get_record_length_slice(pos, flash_memory_slice) + static_cast<uint16_t>(offset);
 }
 
-const uint8_t* FlashKlv::get_record_value_ptr_slice_x(size_t pos, const std::span<const uint8_t>& flash_memory_slice)
-{
-    if ((flash_memory_slice[pos] & KL16_BIT) == 0) {
-        return &flash_memory_slice[pos + sizeof(kl8_t)];
-    }
-    return &flash_memory_slice[pos + sizeof(kl16_t)];
-}
-
 // function for transitioning to using value_pos rather than value_ptr
 size_t FlashKlv::get_record_value_pos_slice(size_t pos, const std::span<const uint8_t>& flash_memory_slice)
 {
@@ -257,34 +249,6 @@ Find the record with the specified key.
 
 Find always searches the current bank.
 */
-FlashKlv::klv_t FlashKlv::find_x(uint16_t key) const
-{
-    klv_t klv = {.key = NOT_FOUND, .length = 0, .value_ptr = nullptr};
-    if (!key_ok(key)) {
-        return klv;
-    }
-
-    // Walk the flash until skipping over deleted records and records with a different key.
-    size_t pos = 0;
-    uint16_t flash_record_key = get_record_key(pos);
-    while (!is_empty(flash_record_key)) {
-        if (flash_record_key == key) {
-            klv = {.key = key, .length = get_record_length(pos), .value_ptr = get_record_value_ptr_x(pos)};
-            if (delete_records()) {
-                // if records are deleted, then there will be only one record with the given key
-                return klv;
-            }
-            // records are not deleted, so continue searching to see if there is another record with this key
-        }
-        pos += get_record_position_increment(pos);
-        if (pos >= _bank_memory_size) {
-            return klv;
-        }
-        flash_record_key = get_record_key(pos);
-    }
-    return klv;
-}
-
 FlashKlv::klp_t FlashKlv::find(uint16_t key) const
 {
     klp_t klp = {.key = NOT_FOUND, .length = 0, .value_pos = 0};
@@ -473,12 +437,13 @@ int32_t FlashKlv::write_key_value_slice(uint16_t key, const std::span<const uint
             // there is already a record of this key, so first check if can be reused
             if (get_record_length(pos) == length) {
                 // new record is same length as old, so check if it has changed
-                if (!memcmp(get_record_value_ptr_x(pos), value_ptr, length)) {
+                const uint8_t* record_value_ptr = get_record_value_pos(pos) + flash_memory_slice.data();
+                if (!memcmp(record_value_ptr, value_ptr, length)) {
                     // record has not changed, so no need to write it
                     return OK_NO_NEED_TO_WRITE;
                 }
                 // record has changed, so check if it can the be overwritten, that is bits are only flipped from 1 to 0, never from 0 to 1
-                if (overwrite_records() && is_slice_overwriteable(get_record_value_ptr_x(pos), value)) {
+                if (overwrite_records() && is_slice_overwriteable(record_value_ptr, value)) {
                     // just overwrite the value: key and length are unchanged
                     flash_write_x(pos + (((flash_memory_slice[pos] & KL16_BIT) == 0) ? sizeof(kl8_t) : sizeof(kl16_t)), length, value_ptr, flash_memory_slice); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
                     return OK_OVERWRITTEN;

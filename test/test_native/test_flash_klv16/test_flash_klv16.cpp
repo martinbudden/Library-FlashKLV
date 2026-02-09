@@ -124,16 +124,16 @@ void test_klv()
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(FlashKlv::SECTOR_SIZE*SECTOR_COUNT - 1));
 
     record4_t recordA {};
-    FlashKlv::klv_t klv {};
-    FlashKlv::klp_t klp {};
+    //FlashKlv::klv_t klv {};
+    FlashKlv::klp_t klv {};
     int err {};
     uint32_t value {};
 
     //TEST_ASSERT_EQUAL(8, recordA.length + sizeof(FlashKlv::kl16_t));
     //klv = flashKLV.find_x(recordA.key);
     TEST_ASSERT_TRUE(klv.key == FlashKlv::NOT_FOUND);
-    klp = flashKLV.find(recordA.key);
-    TEST_ASSERT_TRUE(klp.key == FlashKlv::NOT_FOUND);
+    klv = flashKLV.find(recordA.key);
+    TEST_ASSERT_TRUE(klv.key == FlashKlv::NOT_FOUND);
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(0));
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(1));
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(2));
@@ -150,7 +150,7 @@ void test_klv()
     TEST_ASSERT_TRUE(flashKLV.is_record_empty(8));
     TEST_ASSERT_EQUAL(FlashKlv::NOT_FOUND, klv.key);
     TEST_ASSERT_EQUAL(0, klv.length);
-    TEST_ASSERT_EQUAL(nullptr, klv.value_ptr);
+    TEST_ASSERT_EQUAL(0, klv.value_pos);
 
     recordA.value = 0x7B536AFE;
     //err = flashKLV.write(recordA.key, recordA.length, &recordA.value);
@@ -175,13 +175,13 @@ void test_klv()
     TEST_ASSERT_EQUAL(0x2B81, flashKLV.get_record_key(0));
     TEST_ASSERT_EQUAL(4, flashKLV.get_record_length(0));
     TEST_ASSERT_EQUAL(8, flashKLV.get_record_position_increment(0));
-    TEST_ASSERT_EQUAL_PTR(&flashMemory[4], flashKLV.get_record_value_ptr_x(0));
+    //!!TEST_ASSERT_EQUAL_PTR(&flashMemory[4], flashKLV.get_record_value_ptr_x(0));
 
-    klv = flashKLV.find_x(recordA.key);
+    klv = flashKLV.find(recordA.key);
     TEST_ASSERT_EQUAL(recordA.key, klv.key);
     TEST_ASSERT_EQUAL(recordA.length, klv.length);
-    //!!TEST_ASSERT_EQUAL(flashKLV.flash_pos(4), klv.value_ptr);
-    value = *reinterpret_cast<const uint32_t*>(klv.value_ptr);
+    TEST_ASSERT_EQUAL(4, klv.value_pos);
+    value = *reinterpret_cast<const uint32_t*>(flashKLV.flash_pos(4));
     TEST_ASSERT_EQUAL(recordA.value, value);
 
     // write the same value again, so should not be written and be in same position
@@ -203,11 +203,11 @@ void test_klv()
     TEST_ASSERT_EQUAL(FlashKlv::RECORD_KEY_EMPTY, flashKLV.get_record_key(8));
     TEST_ASSERT_TRUE(flashKLV.is_record_empty(8));
 
-    klv = flashKLV.find_x(recordA.key);
+    klv = flashKLV.find(recordA.key);
     TEST_ASSERT_EQUAL(recordA.key, klv.key);
     TEST_ASSERT_EQUAL(recordA.length, klv.length);
-    //!!TEST_ASSERT_EQUAL(flashKLV.flash_pos(4), klv.value_ptr);
-    value = *reinterpret_cast<const uint32_t*>(klv.value_ptr);
+    TEST_ASSERT_EQUAL(4, klv.value_pos);
+    value = *reinterpret_cast<const uint32_t*>(flashKLV.flash_pos(4));
     TEST_ASSERT_EQUAL(recordA.value, value);
 
     // a value of 0x7B536A00 will allow the record to be overwritten
@@ -229,11 +229,11 @@ void test_klv()
     TEST_ASSERT_EQUAL(FlashKlv::RECORD_KEY_EMPTY, flashKLV.get_record_key(8));
     TEST_ASSERT_TRUE(flashKLV.is_record_empty(8));
 
-    klv = flashKLV.find_x(recordA.key);
+    klv = flashKLV.find(recordA.key);
     TEST_ASSERT_EQUAL(recordA.key, klv.key);
     TEST_ASSERT_EQUAL(recordA.length, klv.length);
-    //!!TEST_ASSERT_EQUAL(flashKLV.flash_pos(4), klv.value_ptr);
-    value = *reinterpret_cast<const uint32_t*>(klv.value_ptr);
+    TEST_ASSERT_EQUAL(4, klv.value_pos);
+    value = *reinterpret_cast<const uint32_t*>(flashKLV.flash_pos(4));
     TEST_ASSERT_EQUAL(recordA.value, value);
 
     // a value of 0xFFFFwill will require the record to be marked as deleted and a new record written
@@ -264,11 +264,11 @@ void test_klv()
     TEST_ASSERT_EQUAL(0x0C, flashKLV.flash_peek(15));
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(16)); // check byte after record still set to 0xFF
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(17));
-    klv = flashKLV.find_x(recordA.key);
+    klv = flashKLV.find(recordA.key);
     TEST_ASSERT_EQUAL(recordA.key, klv.key);
     TEST_ASSERT_EQUAL(recordA.length, klv.length);
-    //!!TEST_ASSERT_EQUAL(flashKLV.flash_pos(12), klv.value_ptr);
-    value = *reinterpret_cast<const uint32_t*>(klv.value_ptr);
+    TEST_ASSERT_EQUAL(12, klv.value_pos);
+    value = *reinterpret_cast<const uint32_t*>(flashKLV.flash_pos(12));
     TEST_ASSERT_EQUAL(recordA.value, value);
 }
 
@@ -290,12 +290,12 @@ void test_klv2()
 
     record400_t recordA {};
     TEST_ASSERT_EQUAL(true, FlashKlv::key_ok(recordA.key));
-    FlashKlv::klv_t klv {};
+    FlashKlv::klp_t klv {};
     int err {};
     uint32_t value {};
 
     TEST_ASSERT_EQUAL(8, recordA.length + sizeof(FlashKlv::klv_t::key) + sizeof(FlashKlv::klv_t::length));
-    klv = flashKLV.find_x(recordA.key);
+    klv = flashKLV.find(recordA.key);
     TEST_ASSERT_TRUE(klv.key == FlashKlv::NOT_FOUND);
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(0));
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(1));
@@ -313,7 +313,7 @@ void test_klv2()
     TEST_ASSERT_TRUE(flashKLV.is_record_empty(8));
     TEST_ASSERT_EQUAL(FlashKlv::NOT_FOUND, klv.key);
     TEST_ASSERT_EQUAL(0, klv.length);
-    TEST_ASSERT_EQUAL(nullptr, klv.value_ptr);
+    TEST_ASSERT_EQUAL(0, klv.value_pos);
 
     recordA.value = 0x7B536AFE;
     //err = flashKLV.write(recordA.key, recordA.length, &recordA.value);
@@ -334,11 +334,11 @@ void test_klv2()
     TEST_ASSERT_EQUAL(FlashKlv::RECORD_KEY_EMPTY, flashKLV.get_record_key(8));
     TEST_ASSERT_TRUE(flashKLV.is_record_empty(8));
 
-    klv = flashKLV.find_x(recordA.key);
+    klv = flashKLV.find(recordA.key);
     TEST_ASSERT_EQUAL(recordA.key, klv.key);
     TEST_ASSERT_EQUAL(recordA.length, klv.length);
-    //!!TEST_ASSERT_EQUAL(flashKLV.flash_pos(4), klv.value_ptr);
-    value = *reinterpret_cast<const uint32_t*>(klv.value_ptr);
+    TEST_ASSERT_EQUAL(4, klv.value_pos);
+    value = *reinterpret_cast<const uint32_t*>(flashKLV.flash_pos(4));
     TEST_ASSERT_EQUAL(recordA.value, value);
 
     // write the same value again, so should not be written and be in same position
@@ -361,11 +361,11 @@ void test_klv2()
     TEST_ASSERT_EQUAL(FlashKlv::RECORD_KEY_EMPTY, flashKLV.get_record_key(8));
     TEST_ASSERT_TRUE(flashKLV.is_record_empty(8));
 
-    klv = flashKLV.find_x(recordA.key);
+    klv = flashKLV.find(recordA.key);
     TEST_ASSERT_EQUAL(recordA.key, klv.key);
     TEST_ASSERT_EQUAL(recordA.length, klv.length);
-    //!!TEST_ASSERT_EQUAL(flashKLV.flash_pos(4), klv.value_ptr);
-    value = *reinterpret_cast<const uint32_t*>(klv.value_ptr);
+    TEST_ASSERT_EQUAL(4, klv.value_pos);
+    value = *reinterpret_cast<const uint32_t*>(flashKLV.flash_pos(4));
     TEST_ASSERT_EQUAL(recordA.value, value);
 
     // a value of 0x7B536A00 will allow the record to be overwritten
@@ -388,11 +388,11 @@ void test_klv2()
     TEST_ASSERT_EQUAL(FlashKlv::RECORD_KEY_EMPTY, flashKLV.get_record_key(8));
     TEST_ASSERT_TRUE(flashKLV.is_record_empty(8));
 
-    klv = flashKLV.find_x(recordA.key);
+    klv = flashKLV.find(recordA.key);
     TEST_ASSERT_EQUAL(recordA.key, klv.key);
     TEST_ASSERT_EQUAL(recordA.length, klv.length);
-    //!!TEST_ASSERT_EQUAL(flashKLV.flash_pos(4), klv.value_ptr);
-    value = *reinterpret_cast<const uint32_t*>(klv.value_ptr);
+    TEST_ASSERT_EQUAL(4, klv.value_pos);
+    value = *reinterpret_cast<const uint32_t*>(flashKLV.flash_pos(4));
     TEST_ASSERT_EQUAL(recordA.value, value);
 
     // a value of 0xFFFFwill will require the record to be marked as deleted and a new record written
@@ -423,11 +423,11 @@ void test_klv2()
     TEST_ASSERT_EQUAL(0x0C, flashKLV.flash_peek(15));
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(16)); // check byte after record still set to 0xFF
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(17));
-    klv = flashKLV.find_x(recordA.key);
+    klv = flashKLV.find(recordA.key);
     TEST_ASSERT_EQUAL(recordA.key, klv.key);
     TEST_ASSERT_EQUAL(recordA.length, klv.length);
-    //!!TEST_ASSERT_EQUAL(flashKLV.flash_pos(12), klv.value_ptr);
-    value = *reinterpret_cast<const uint32_t*>(klv.value_ptr);
+    TEST_ASSERT_EQUAL(12, klv.value_pos);
+    value = *reinterpret_cast<const uint32_t*>(flashKLV.flash_pos(12));
     TEST_ASSERT_EQUAL(recordA.value, value);
 }
 
@@ -443,10 +443,10 @@ void test_multi_page_records()
     TEST_ASSERT_EQUAL(0x3571, record12A.key);
     TEST_ASSERT_EQUAL(16, record12A.length + sizeof(FlashKlv::klv_t::key) + sizeof(FlashKlv::klv_t::length));
 
-    FlashKlv::klv_t klv {};
+    FlashKlv::klp_t klv {};
     int err {};
 
-    klv = flashKLV.find_x(record12A.key);
+    klv = flashKLV.find(record12A.key);
     TEST_ASSERT_TRUE(klv.key == FlashKlv::NOT_FOUND);
     TEST_ASSERT_EQUAL(FlashKlv::RECORD_KEY_EMPTY, flashKLV.get_record_key(0));
     TEST_ASSERT_TRUE(flashKLV.is_record_empty(0));
@@ -458,7 +458,7 @@ void test_multi_page_records()
     TEST_ASSERT_TRUE(flashKLV.is_record_empty(8));
     TEST_ASSERT_EQUAL(FlashKlv::NOT_FOUND, klv.key);
     TEST_ASSERT_EQUAL(0, klv.length);
-    TEST_ASSERT_EQUAL(nullptr, klv.value_ptr);
+    TEST_ASSERT_EQUAL(0, klv.value_pos);
 
 // Write a record
     record12A.value = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 };
@@ -489,11 +489,11 @@ void test_multi_page_records()
     TEST_ASSERT_EQUAL(FlashKlv::RECORD_KEY_EMPTY, flashKLV.get_record_key(16));
     TEST_ASSERT_TRUE(flashKLV.is_record_empty(16));
 
-    klv = flashKLV.find_x(record12A.key);
+    klv = flashKLV.find(record12A.key);
     TEST_ASSERT_EQUAL(record12A.key, klv.key);
     TEST_ASSERT_EQUAL(record12A.length, klv.length);
-    //!!TEST_ASSERT_EQUAL(flashKLV.flash_pos(4), klv.value_ptr);
-    TEST_ASSERT_EQUAL(record12A.value[0], *klv.value_ptr);
+    TEST_ASSERT_EQUAL(4, klv.value_pos);
+    TEST_ASSERT_EQUAL(record12A.value[0], *flashKLV.flash_pos(4));
 
 // Overwrite record
     record12A.value = { 1, 0, 2, 4, 4, 6, 7, 0, 9, 2, 11, 12 };
@@ -524,11 +524,11 @@ void test_multi_page_records()
     TEST_ASSERT_EQUAL(FlashKlv::RECORD_KEY_EMPTY, flashKLV.get_record_key(16));
     TEST_ASSERT_TRUE(flashKLV.is_record_empty(16));
 
-    klv = flashKLV.find_x(record12A.key);
+    klv = flashKLV.find(record12A.key);
     TEST_ASSERT_EQUAL(record12A.key, klv.key);
     TEST_ASSERT_EQUAL(record12A.length, klv.length);
-    //!!TEST_ASSERT_EQUAL(flashKLV.flash_pos(4), klv.value_ptr);
-    TEST_ASSERT_EQUAL(record12A.value[0], *klv.value_ptr);
+    TEST_ASSERT_EQUAL(4, klv.value_pos);
+    TEST_ASSERT_EQUAL(record12A.value[0], *flashKLV.flash_pos(4));
 
 // Write new record
     record12A.value = { 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41 };
@@ -576,11 +576,11 @@ void test_multi_page_records()
     TEST_ASSERT_EQUAL(0, flashKLV.flash_peek(0) & TOP_BIT);
     TEST_ASSERT_EQUAL(12, flashKLV.get_record_length(0));
 
-    klv = flashKLV.find_x(record12A.key);
+    klv = flashKLV.find(record12A.key);
     TEST_ASSERT_EQUAL(record12A.key, klv.key);
     TEST_ASSERT_EQUAL(record12A.length, klv.length);
-    //!!TEST_ASSERT_EQUAL(flashKLV.flash_pos(20), klv.value_ptr);
-    TEST_ASSERT_EQUAL(record12A.value[0], *klv.value_ptr);
+    TEST_ASSERT_EQUAL(20, klv.value_pos);
+    TEST_ASSERT_EQUAL(record12A.value[0], *flashKLV.flash_pos(20));
 }
 
 void test_length_3()
@@ -595,13 +595,13 @@ void test_length_3()
     TEST_ASSERT_EQUAL(0x0329, record3A.key);
     TEST_ASSERT_EQUAL(7, record3A.length + sizeof(FlashKlv::klv_t::key) + sizeof(FlashKlv::klv_t::length));
 
-    FlashKlv::klv_t klv {};
+    FlashKlv::klp_t klv {};
     int err {};
 
-    klv = flashKLV.find_x(record3A.key);
+    klv = flashKLV.find(record3A.key);
     TEST_ASSERT_EQUAL(FlashKlv::NOT_FOUND, klv.key);
     TEST_ASSERT_EQUAL(0, klv.length);
-    TEST_ASSERT_EQUAL(nullptr, klv.value_ptr);
+    TEST_ASSERT_EQUAL(0, klv.value_pos);
 
     TEST_ASSERT_TRUE(flashKLV.is_record_empty(0));
     TEST_ASSERT_EQUAL(FlashKlv::RECORD_KEY_EMPTY, flashKLV.get_record_key(0));
@@ -633,11 +633,11 @@ void test_length_3()
     TEST_ASSERT_TRUE(flashKLV.is_record_empty(7));
     TEST_ASSERT_EQUAL(FlashKlv::RECORD_KEY_EMPTY, flashKLV.get_record_key(7));
 
-    klv = flashKLV.find_x(record3A.key);
+    klv = flashKLV.find(record3A.key);
     TEST_ASSERT_EQUAL(record3A.key, klv.key);
     TEST_ASSERT_EQUAL(record3A.length, klv.length);
-    //!!TEST_ASSERT_EQUAL(flashKLV.flash_pos(4), klv.value_ptr);
-    TEST_ASSERT_EQUAL(record3A.value[0], *klv.value_ptr);
+    TEST_ASSERT_EQUAL(4, klv.value_pos);
+    TEST_ASSERT_EQUAL(record3A.value[0], *flashKLV.flash_pos(4));
 
 // Overwrite record
     record3A.value = { 1, 0, 2 };
@@ -659,11 +659,11 @@ void test_length_3()
     TEST_ASSERT_EQUAL(FlashKlv::RECORD_KEY_EMPTY, flashKLV.get_record_key(7));
     TEST_ASSERT_TRUE(flashKLV.is_record_empty(7));
 
-    klv = flashKLV.find_x(record3A.key);
+    klv = flashKLV.find(record3A.key);
     TEST_ASSERT_EQUAL(record3A.key, klv.key);
     TEST_ASSERT_EQUAL(record3A.length, klv.length);
-    //!!TEST_ASSERT_EQUAL(flashKLV.flash_pos(4), klv.value_ptr);
-    TEST_ASSERT_EQUAL(record3A.value[0], *klv.value_ptr);
+    TEST_ASSERT_EQUAL(4, klv.value_pos);
+    TEST_ASSERT_EQUAL(record3A.value[0], *flashKLV.flash_pos(4));
 
 // Write new record
     record3A.value = { 3, 5, 7 };
@@ -693,11 +693,11 @@ void test_length_3()
     TEST_ASSERT_EQUAL(0x0329, flashKLV.get_record_key(7));
     TEST_ASSERT_EQUAL(3, flashKLV.get_record_length(7));
 
-    klv = flashKLV.find_x(record3A.key);
+    klv = flashKLV.find(record3A.key);
     TEST_ASSERT_EQUAL(record3A.key, klv.key);
     TEST_ASSERT_EQUAL(record3A.length, klv.length);
-    //!!TEST_ASSERT_EQUAL(flashKLV.flash_pos(11), klv.value_ptr);
-    TEST_ASSERT_EQUAL(record3A.value[0], *klv.value_ptr);
+    TEST_ASSERT_EQUAL(11, klv.value_pos);
+    TEST_ASSERT_EQUAL(record3A.value[0], *flashKLV.flash_pos(11));
 }
 
 void test_length_7()
@@ -754,8 +754,8 @@ void test_length_7()
     klv = flashKLV.find(record7A.key);
     TEST_ASSERT_EQUAL(record7A.key, klv.key);
     TEST_ASSERT_EQUAL(record7A.length, klv.length);
-    //!!TEST_ASSERT_EQUAL(flashKLV.flash_pos(4), klv.value_ptr);
-    //!!TEST_ASSERT_EQUAL(record7A.value[0], *klv.value_ptr);
+    TEST_ASSERT_EQUAL(4, klv.value_pos);
+    TEST_ASSERT_EQUAL(record7A.value[0], *flashKLV.flash_pos(4));
 
 // Overwrite record
     record7A.value = { 1, 0, 2, 4, 4, 6, 7 };
@@ -838,10 +838,10 @@ void test_length_23()
     TEST_ASSERT_EQUAL(0x2361, record23A.key);
     TEST_ASSERT_EQUAL(27, record23A.length + sizeof(FlashKlv::klv_t::key) + sizeof(FlashKlv::klv_t::length));
 
-    FlashKlv::klv_t klv {};
+    FlashKlv::klp_t klv {};
     int err {};
 
-    klv = flashKLV.find_x(record23A.key);
+    klv = flashKLV.find(record23A.key);
     TEST_ASSERT_TRUE(klv.key == FlashKlv::NOT_FOUND);
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(0));
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(1));
@@ -852,7 +852,7 @@ void test_length_23()
     TEST_ASSERT_TRUE(flashKLV.is_record_empty(8));
     TEST_ASSERT_EQUAL(FlashKlv::NOT_FOUND, klv.key);
     TEST_ASSERT_EQUAL(0, klv.length);
-    TEST_ASSERT_EQUAL(nullptr, klv.value_ptr);
+    TEST_ASSERT_EQUAL(0, klv.value_pos);
 
 // Write a record
     record23A.value = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23 };
@@ -893,11 +893,11 @@ void test_length_23()
     TEST_ASSERT_EQUAL(FlashKlv::RECORD_KEY_EMPTY, flashKLV.get_record_key(27));
     TEST_ASSERT_TRUE(flashKLV.is_record_empty(27));
     TEST_ASSERT_EQUAL(23, flashKLV.get_record_length(0));
-    klv = flashKLV.find_x(record23A.key);
+    klv = flashKLV.find(record23A.key);
     TEST_ASSERT_EQUAL(record23A.key, klv.key);
     TEST_ASSERT_EQUAL(record23A.length, klv.length);
-    //!!TEST_ASSERT_EQUAL(flashKLV.flash_pos(4), klv.value_ptr);
-    TEST_ASSERT_EQUAL(record23A.value[0], *klv.value_ptr);
+    TEST_ASSERT_EQUAL(4, klv.value_pos);
+    TEST_ASSERT_EQUAL(record23A.value[0], *flashKLV.flash_pos(4));
 
 // Overwrite record
     record23A.value = { 1, 0, 2, 4, 4, 6, 7, 0, 9, 2, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23 };
@@ -930,11 +930,11 @@ void test_length_23()
     TEST_ASSERT_EQUAL(FlashKlv::RECORD_KEY_EMPTY, flashKLV.get_record_key(27));
     TEST_ASSERT_TRUE(flashKLV.is_record_empty(27));
     TEST_ASSERT_EQUAL(23, flashKLV.get_record_length(0));
-    klv = flashKLV.find_x(record23A.key);
+    klv = flashKLV.find(record23A.key);
     TEST_ASSERT_EQUAL(record23A.key, klv.key);
     TEST_ASSERT_EQUAL(record23A.length, klv.length);
-    //!!TEST_ASSERT_EQUAL(flashKLV.flash_pos(4), klv.value_ptr);
-    TEST_ASSERT_EQUAL(record23A.value[0], *klv.value_ptr);
+    TEST_ASSERT_EQUAL(4, klv.value_pos);
+    TEST_ASSERT_EQUAL(record23A.value[0], *flashKLV.flash_pos(4));
 
 // Write new record
     record23A.value = { 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 52, 63, 74, 85, 96, 107, 118, 139, 140, 151, 162 };
@@ -996,11 +996,11 @@ void test_length_23()
     TEST_ASSERT_EQUAL(0x2361, flashKLV.get_record_key(27));
     TEST_ASSERT_EQUAL(23, flashKLV.get_record_length(0));
     TEST_ASSERT_EQUAL(23, flashKLV.get_record_length(27));
-    klv = flashKLV.find_x(record23A.key);
+    klv = flashKLV.find(record23A.key);
     TEST_ASSERT_EQUAL(record23A.key, klv.key);
     TEST_ASSERT_EQUAL(record23A.length, klv.length);
-    //!!TEST_ASSERT_EQUAL(flashKLV.flash_pos(31), klv.value_ptr);
-    TEST_ASSERT_EQUAL(record23A.value[0], *klv.value_ptr);
+    TEST_ASSERT_EQUAL(31, klv.value_pos);
+    TEST_ASSERT_EQUAL(record23A.value[0], *flashKLV.flash_pos(31));
 }
 
 // NOLINTEND(cppcoreguidelines-avoid-magic-numbers,cppcoreguidelines-avoid-non-const-global-variables,cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-type-reinterpret-cast,hicpp-signed-bitwise,readability-identifier-length,readability-magic-numbers,altera-struct-pack-align)

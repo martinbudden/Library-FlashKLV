@@ -105,7 +105,6 @@ public:
     size_t bytes_free() const;
     size_t memory_size() const { return _bank_memory_size; }
 
-    klv_t find_x(uint16_t key) const;
     klp_t find(uint16_t key) const;
     klp_t find_next(size_t pos) const;
     size_t find_first_free_pos() const;
@@ -148,7 +147,6 @@ protected:
     static uint16_t get_record_key_slice(size_t pos, const std::span<const uint8_t>& flash_memory_slice);
     static uint16_t get_record_length_slice(size_t pos, const std::span<const uint8_t>& flash_memory_slice);
     static uint16_t get_record_position_increment_slice(size_t pos, const std::span<const uint8_t>& flash_memory_slice);
-    static const uint8_t* get_record_value_ptr_slice_x(size_t pos, const std::span<const uint8_t>& flash_memory_slice);
     static size_t get_record_value_pos_slice(size_t pos, const std::span<const uint8_t>& flash_memory_slice);
 
     static void call_flash_range_erase(void* param);
@@ -162,7 +160,6 @@ public:
     uint16_t get_record_key(size_t pos) const { return get_record_key_slice(pos, _current_bank_memory_slice); }
     uint16_t get_record_length(size_t pos) const { return get_record_length_slice(pos, _current_bank_memory_slice); }
     uint16_t get_record_position_increment(size_t pos) const { return get_record_position_increment_slice(pos, _current_bank_memory_slice); }
-    const uint8_t* get_record_value_ptr_x(size_t pos) const { return get_record_value_ptr_slice_x(pos, _current_bank_memory_slice); }
     size_t get_record_value_pos(size_t pos) const { return get_record_value_pos_slice(pos, _current_bank_memory_slice); }
     int32_t copy_records_to_other_bank();
     void swap_banks() { std::span<uint8_t> temp = _other_bank_memory_slice; _other_bank_memory_slice = _current_bank_memory_slice; _current_bank_memory_slice = temp; }
