@@ -6,6 +6,12 @@
 #include <span>
 
 
+struct flash_key_value_t {
+    std::span<const uint8_t> value;
+    //std::span<const std::byte> value;
+    uint16_t key;
+};
+
 /*!
 Flash Key Length Value (KLV) storage.
 
@@ -13,8 +19,13 @@ Currently only implemented on Raspberry Pi Pico platform.
 */
 class FlashKlv {
 public:
-    enum { ONE_BANK = 1, TWO_BANKS = 2 };
-    enum { OVERWRITE_RECORDS = 0x01, DELETE_RECORDS = 0x02, USE_CRC = 0x04 };
+    static constexpr uint8_t ONE_BANK = 1;
+    static constexpr uint8_t TWO_BANKS = 2;
+
+    static constexpr uint8_t OVERWRITE_RECORDS = 0x01;
+    static constexpr uint8_t DELETE_RECORDS = 0x02;
+    static constexpr uint8_t USE_CRC = 0x04;
+
     static constexpr uint32_t OK = 0;
     static constexpr uint32_t OK_NO_NEED_TO_WRITE = 1;
     static constexpr uint32_t OK_OVERWRITTEN = 2;
@@ -22,19 +33,23 @@ public:
     static constexpr uint32_t OK_SECTOR_ALREADY_ERASED = 4;
     static constexpr uint32_t OK_NO_RECORDS_COPIED = 5;
 
-    enum {
-        ERROR_FLASH_FULL = -1, ERROR_NOT_FOUND = -2, ERROR_INVALID_KEY = -3,
-        ERROR_RECORD_TOO_LARGE = -4, ERROR_RECORD_TOO_SMALL = -5,
-        ERROR_OTHER_BANK_NOT_INITIALIZED = -6, ERROR_OTHER_BANK_NOT_ERASED = -7,
-        ERROR_INVALID_FLASH_BANK_PTR = -8
-    };
+    static constexpr int32_t ERROR_FLASH_FULL = -1;
+    static constexpr int32_t ERROR_NOT_FOUND = -2;
+    static constexpr int32_t ERROR_INVALID_KEY = -3;
+
+    static constexpr int32_t ERROR_RECORD_TOO_LARGE = -4;
+    static constexpr int32_t ERROR_RECORD_TOO_SMALL = -5;
+    static constexpr int32_t ERROR_OTHER_BANK_NOT_INITIALIZED = -6;
+    static constexpr int32_t ERROR_OTHER_BANK_NOT_ERASED = -7;
+    static constexpr int32_t ERROR_INVALID_FLASH_BANK_PTR = -8;
     static constexpr uint32_t ERROR_NO_FREE_FLASH = UINT32_MAX;
+
     static constexpr uint16_t NOT_FOUND = 0;
+
     static constexpr uint16_t RECORD_KEY_EMPTY = 0xFFFF; 
     static constexpr uint16_t RECORD_KEY_BANK_HEADER = 0x3FFE;
     static constexpr uint16_t RECORD_KEY_DELETED = 0;
-    static constexpr uint16_t RECORD_EMPTY = 0xFF;
-    static constexpr uint8_t  KEY8_MIN = 0x01;
+    static constexpr uint16_t RECORD_EMPTY = 0xFF;    static constexpr uint8_t  KEY8_MIN = 0x01;
     static constexpr uint8_t  KEY8_MAX = 0x3F;
     static constexpr uint16_t KEY16_MIN = 0x0100;
     static constexpr uint16_t KEY16_MAX = 0x3FFD;
@@ -76,10 +91,10 @@ protected:
         uint8_t* data;
     };
 public:
-    FlashKlv(uint8_t* flash_memory_slice, size_t sectors_per_bank, size_t bankCount);
-    FlashKlv(uint8_t* flash_memory_slice, size_t sectors_per_bank);
-    FlashKlv(size_t sectors_per_bank, size_t bankCount);
-    explicit FlashKlv(size_t sectors_per_bank);
+    FlashKlv(std::span<uint8_t> flash_base_memory_slice, size_t bank_count);
+    //FlashKlv(uint8_t* flash_memory_slice, size_t sectors_per_bank);
+    //FlashKlv(size_t sectors_per_bank, size_t bank_count);
+    //explicit FlashKlv(size_t sectors_per_bank);
     ~FlashKlv() = default;
 public:
     static uint8_t calculate_crc(uint8_t crc, uint8_t value);
@@ -98,15 +113,18 @@ public:
     int32_t read(void* value, size_t size,  uint16_t key) const;
 
     int32_t remove(uint16_t key) { return remove(key, _current_bank_memory_slice); }
+
+    int32_t write_key_value(const flash_key_value_t& key_value) { return write_key_value_slice(key_value, _current_bank_memory_slice); }
+
+    // old style writes, remove after test code updated
     int32_t write_slice(uint16_t key, uint16_t length, const uint8_t* value_ptr) { return write_klv_slice(key, length, value_ptr, _current_bank_memory_slice); }
     int32_t write(uint16_t key, uint16_t length, const void* value_ptr) { return write_slice(key, length, static_cast<const uint8_t*>(value_ptr)); }
-    int32_t write_klv(const klv_t& klv) { return write(klv.key, klv.length, klv.value_ptr); }
+    //int32_t write_klv(const klv_t& klv) { return write(klv.key, klv.length, klv.value_ptr); }
 
     bool is_current_bank_erased() const  { return is_bank_erased(_current_bank_memory_slice); }
     bool is_other_bank_erased() const  { return is_bank_erased(_other_bank_memory_slice); }
     int32_t erase_current_bank() { return erase_bank(_current_bank_memory_slice); }
     int32_t erase_other_bank() { return erase_bank(_other_bank_memory_slice); }
-    size_t get_bank_sector_count() const { return _bank_sector_count; }
     bool is_sector_erased_current_bank(size_t sector) const  { return is_sector_erased(sector, _current_bank_memory_slice); }
     bool is_sector_erased_other_bank(size_t sector) const  { return is_sector_erased(sector, _other_bank_memory_slice); }
 
@@ -121,6 +139,7 @@ protected:
 
     int32_t remove(uint16_t key, std::span<uint8_t>& flash_memory_slice);
     int32_t write_klv_slice(uint16_t key, uint16_t length, const uint8_t* value_ptr, std::span<uint8_t>& flash_memory_slice);
+    int32_t write_key_value_slice(const flash_key_value_t& key_value, std::span<uint8_t>& flash_memory_slice);
     void flash_mark_record_as_deleted(size_t pos, std::span<uint8_t>& flash_bank_memory_slice);
     void flash_write(size_t pos, uint16_t length, const uint8_t* value_ptr, std::span<uint8_t>& flash_memory_slice);
     void flash_delete_and_write(size_t delete_pos, size_t pos, uint16_t key, uint16_t length, const uint8_t* value_ptr, std::span<uint8_t>& flash_memory_slice);
@@ -148,7 +167,7 @@ public:
     const uint8_t* get_record_value_ptr(size_t pos) const { return get_record_value_ptr_slice(pos, _current_bank_memory_slice); }
     size_t get_record_value_pos(size_t pos) const { return get_record_value_pos_slice(pos, _current_bank_memory_slice); }
     int32_t copy_records_to_other_bank();
-    void swap_banks() { std::span<uint8_t> other_bank_memory_slice = _other_bank_memory_slice; _other_bank_memory_slice = _current_bank_memory_slice; _current_bank_memory_slice = other_bank_memory_slice; }
+    void swap_banks() { std::span<uint8_t> temp = _other_bank_memory_slice; _other_bank_memory_slice = _current_bank_memory_slice; _current_bank_memory_slice = temp; }
 // for testing
     //const uint8_t* flash_pos(size_t pos) { return _current_bank_memory_slice + pos; } //!< for testing
     uint8_t flash_peek(size_t pos) { return _current_bank_memory_slice[pos]; } //!< for testing
@@ -161,7 +180,6 @@ protected:
     std::span<uint8_t> _current_bank_memory_slice;
     std::span<uint8_t> _other_bank_memory_slice;
     size_t _bank_memory_size; //!< the size of each memory bank
-    size_t _bank_sector_count; //!< the number of sectors in each memory bank
     uint32_t _mode {OVERWRITE_RECORDS | DELETE_RECORDS};
     std::array<uint8_t, PAGE_SIZE> _page_cache {};
     static constexpr std::array<uint8_t, 8> BANK_HEADER =  { 0xFF, 0xFE, 0x04, 0x00, 0xF1, 0xF2, 0xF3, 0xF4 };

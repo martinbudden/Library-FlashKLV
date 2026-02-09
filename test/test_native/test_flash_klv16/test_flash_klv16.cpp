@@ -2,6 +2,7 @@
 #include <unity.h>
 
 #include <array>
+#include <span>
 
 
 void setUp()
@@ -26,18 +27,22 @@ struct record3_t {
     uint16_t key = 0x0329;
     uint16_t length = LENGTH;
     std::array<uint8_t, LENGTH> value {};
+    std::span<const uint8_t> span {value};
+    //std::span<const std::byte> span {value};
 };
 
 struct record4_t {
     uint16_t key = 0x2B81;
     uint16_t length = sizeof(int32_t);
     int32_t value = 0;
+    std::span<const uint8_t> span{reinterpret_cast<uint8_t*>(&value), sizeof(value)};
 };
 
 struct record400_t {
     uint16_t key = 0x0100;
     uint16_t length = sizeof(int32_t);
     int32_t value = 0;
+    std::span<const uint8_t> span{reinterpret_cast<uint8_t*>(&value), sizeof(value)};
 };
 
 struct record7_t {
@@ -45,6 +50,7 @@ struct record7_t {
     uint16_t key = 0x0717;
     uint16_t length = LENGTH;
     std::array<uint8_t, LENGTH> value {};
+    std::span<uint8_t> span {value};
 };
 
 struct record12_t {
@@ -52,6 +58,7 @@ struct record12_t {
     uint16_t key = 0x3571;
     uint16_t length = LENGTH;
     std::array<uint8_t, LENGTH> value {};
+    std::span<uint8_t> span {value};
 };
 
 struct record23_t {
@@ -59,6 +66,7 @@ struct record23_t {
     uint16_t key = 0x2361;
     uint16_t length = LENGTH;
     std::array<uint8_t, LENGTH> value {};
+    std::span<uint8_t> span {value};
 };
 
 void test_flash_is_byte_overwriteable()
@@ -80,7 +88,7 @@ void test_flash_is_byte_overwriteable()
 
 void test_klv16()
 {
-    FlashKlv flashKLV(&flashMemory[0], SECTOR_COUNT);
+    FlashKlv flashKLV(flashMemory, FlashKlv::ONE_BANK);
     flashKLV.erase_current_bank();
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(FlashKlv::SECTOR_SIZE*SECTOR_COUNT - 1));
 
@@ -110,7 +118,7 @@ void test_klv16()
 
 void test_klv()
 {
-    FlashKlv flashKLV(&flashMemory[0], SECTOR_COUNT);
+    FlashKlv flashKLV(flashMemory, FlashKlv::ONE_BANK);
     flashKLV.erase_current_bank();
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(0));
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(FlashKlv::SECTOR_SIZE*SECTOR_COUNT - 1));
@@ -142,7 +150,10 @@ void test_klv()
     TEST_ASSERT_EQUAL(nullptr, klv.value_ptr);
 
     recordA.value = 0x7B536AFE;
-    err = flashKLV.write(recordA.key, recordA.length, &recordA.value);
+    //err = flashKLV.write(recordA.key, recordA.length, &recordA.value);
+    //std::span<const std::byte> span = std::as_bytes(std::span(&recordA.value, 1)); // span of std::byte
+    //std::span<uint8_t> span(reinterpret_cast<uint8_t*>(&recordA.value), recordA.length);
+    err = flashKLV.write_key_value(flash_key_value_t{.value = recordA.span, .key = recordA.key});
     TEST_ASSERT_EQUAL(FlashKlv::OK, err);
 
     TEST_ASSERT_EQUAL(0x2B | TOP_BITS, flashKLV.flash_peek(0));
@@ -257,7 +268,7 @@ void test_klv()
 
 void test_klv2()
 {
-    FlashKlv flashKLV(&flashMemory[0], SECTOR_COUNT);
+    FlashKlv flashKLV(flashMemory, FlashKlv::ONE_BANK);
     flashKLV.erase_current_bank();
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(FlashKlv::SECTOR_SIZE*SECTOR_COUNT - 1));
 
@@ -412,7 +423,7 @@ void test_klv2()
 
 void test_multi_page_records()
 {
-    FlashKlv flashKLV(&flashMemory[0], SECTOR_COUNT);
+    FlashKlv flashKLV(flashMemory, FlashKlv::ONE_BANK);
     flashKLV.erase_current_bank();
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(0));
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(FlashKlv::SECTOR_SIZE*SECTOR_COUNT - 1));
@@ -561,7 +572,7 @@ void test_multi_page_records()
 
 void test_length_3()
 {
-    FlashKlv flashKLV(&flashMemory[0], SECTOR_COUNT);
+    FlashKlv flashKLV(flashMemory, FlashKlv::ONE_BANK);
     flashKLV.erase_current_bank();
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(0));
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(FlashKlv::SECTOR_SIZE*SECTOR_COUNT - 1));
@@ -589,7 +600,8 @@ void test_length_3()
 
 // Write a record
     record3A.value = { 1, 2, 3 };
-    err = flashKLV.write(record3A.key, record3A.length, &record3A.value);
+    //err = flashKLV.write(record3A.key, record3A.length, &record3A.value);
+    err = flashKLV.write_key_value(flash_key_value_t{.value = record3A.span, .key = record3A.key});
     TEST_ASSERT_EQUAL(FlashKlv::OK, err);
     TEST_ASSERT_FALSE(flashKLV.is_record_empty(0));
     TEST_ASSERT_EQUAL(3, flashKLV.get_record_length(0));
@@ -675,7 +687,7 @@ void test_length_3()
 
 void test_length_7()
 {
-    FlashKlv flashKLV(&flashMemory[0], SECTOR_COUNT);
+    FlashKlv flashKLV(flashMemory, FlashKlv::ONE_BANK);
     flashKLV.erase_current_bank();
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(0));
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(FlashKlv::SECTOR_SIZE*SECTOR_COUNT - 1));
@@ -797,7 +809,7 @@ void test_length_7()
 
 void test_length_23()
 {
-    FlashKlv flashKLV(&flashMemory[0], SECTOR_COUNT);
+    FlashKlv flashKLV(flashMemory, FlashKlv::ONE_BANK);
     flashKLV.erase_current_bank();
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(0));
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(FlashKlv::SECTOR_SIZE*SECTOR_COUNT - 1));

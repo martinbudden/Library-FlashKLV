@@ -57,7 +57,7 @@ struct record23_t {
 
 void test_klv8_keys()
 {
-    FlashKlv flashKLV(&flashMemory[0], SECTOR_COUNT);
+    FlashKlv flashKLV(flashMemory, FlashKlv::ONE_BANK);
     flashKLV.erase_current_bank();
 
     TEST_ASSERT_EQUAL(0xFF, flashKLV.flash_peek(0));
@@ -116,7 +116,7 @@ void test_klv8_keys()
 
 void test_klv8()
 {
-    FlashKlv flashKLV(&flashMemory[0], SECTOR_COUNT);
+    FlashKlv flashKLV(flashMemory, FlashKlv::ONE_BANK);
     flashKLV.erase_current_bank();
 
     FlashKlv::klv_t klv {};
@@ -269,7 +269,7 @@ void test_klv8()
 
 void test_config()
 {
-    FlashKlv flashKLV(&flashMemory[0], SECTOR_COUNT);
+    FlashKlv flashKLV(flashMemory, FlashKlv::ONE_BANK);
     flashKLV.erase_current_bank();
 
     // declare a key and structure
