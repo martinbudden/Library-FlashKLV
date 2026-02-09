@@ -109,8 +109,6 @@ uint8_t FlashKlv::calculate_crc_slice(uint8_t crc, const std::span<const uint8_t
     return crc;
 }
 
-
-
 /*!
 Flash can be overwritten if bits are only flipped from 1 to 0, never from 0 to 1
 */
@@ -128,7 +126,6 @@ bool FlashKlv::is_slice_overwriteable(const uint8_t* flash_ptr, const std::span<
 {
     for (auto value : data) {
         const uint8_t flash = *flash_ptr++; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-
         if (!is_byte_overwriteable(flash, value)) {
             return false;
         }
@@ -178,7 +175,6 @@ uint16_t FlashKlv::get_record_position_increment_slice(size_t pos, const std::sp
     return get_record_length_slice(pos, flash_memory_slice) + static_cast<uint16_t>(offset);
 }
 
-// function for transitioning to using value_pos rather than value_ptr
 size_t FlashKlv::get_record_value_pos_slice(size_t pos, const std::span<const uint8_t>& flash_memory_slice)
 {
     if ((flash_memory_slice[pos] & KL16_BIT) == 0) {
@@ -203,7 +199,6 @@ size_t FlashKlv::find_first_free_pos() const
         }
         flash_record_key = get_record_key(pos);
     }
-
     return pos;
 }
 
@@ -221,7 +216,6 @@ int32_t FlashKlv::remove(uint16_t key, std::span<uint8_t>& flash_memory_slice)
     if (!key_ok(key)) {
         return ERROR_INVALID_KEY;
     }
-
     size_t pos = 0;
     uint16_t flash_record_key = get_record_key_slice(pos, flash_memory_slice); // NOLINT(cppcoreguidelines-init-variables)
     while (!is_empty(flash_record_key)) {
@@ -249,7 +243,6 @@ FlashKlv::klp_t FlashKlv::find(uint16_t key) const
     if (!key_ok(key)) {
         return klp;
     }
-
     // Walk the flash until skipping over deleted records and records with a different key.
     size_t pos = 0;
     uint16_t flash_record_key = get_record_key(pos);
@@ -270,6 +263,7 @@ FlashKlv::klp_t FlashKlv::find(uint16_t key) const
     }
     return klp;
 }
+
 /*!
 Find the next undeleted record with any key, starting at pos.
 
@@ -529,7 +523,7 @@ void FlashKlv::flash_read_page_into_cache(size_t page_index, const std::span<con
 }
 
 /*!
-write the data at `value_ptr` to flash in page-sized chunks using `flash_write_page`
+write data to flash in page-sized chunks using `flash_write_page`
 */
 void FlashKlv::flash_write(size_t pos, const std::span<const uint8_t>& data, std::span<uint8_t>& flash_memory_slice)
 {
@@ -770,15 +764,8 @@ void FlashKlv::flash_write_page(size_t page_index, std::span<uint8_t>& flash_mem
 
 #elif defined(FRAMEWORK_TEST)
 
-    //program_params_t params = { .address = &flash_memory_slice[page_index*PAGE_SIZE], .data = &_page_cache[0] };
     program_params_t params = { .address = flash_memory_slice.data() + page_index*PAGE_SIZE, .data = &_page_cache[0] };
     flash_safe_execute(call_flash_range_program, &params, UINT32_MAX);
-    //memcpy(params->address, params->data, PAGE_SIZE);
-    /*std::copy(flash_memory_slice.begin() + page_index*PAGE_SIZE,
-          flash_memory_slice.begin() + page_index*PAGE_SIZE + PAGE_SIZE,
-          &_page_cache[0]);*/
-
-    //memcpy(flash_memory_slice.data() + page_index*PAGE_SIZE, &_page_cache[0], PAGE_SIZE);
 
 #else
 
