@@ -44,8 +44,6 @@ int flash_safe_execute(void (*fn)(void*), void* param, uint32_t timeout_ms) { (v
 #include <pico/flash.h>
 #endif
 
-// NOLINTBEGIN(cppcoreguidelines-avoid-c-arrays, hicpp-avoid-c-arrays,modernize-avoid-c-arrays)
-
 /*!
 If bankCount == 1 then we have one bank of flash at
 address: flash_memory_slice, size: SECTOR_SIZE*sectors_per_bank
@@ -380,7 +378,8 @@ int32_t FlashKlv::copy_records_to_other_bank()
     while (!is_empty(flash_record_key)) {
         if (flash_record_key != RECORD_KEY_DELETED && flash_record_key != RECORD_KEY_BANK_HEADER) {
             // not a deleted record, so write it to the other bank
-            flash_delete_and_write(NO_DELETE, write_pos, flash_record_key, get_record_length(pos), get_record_value_ptr(pos), _other_bank_memory_slice);
+            const uint8_t* value_ptr =  get_record_value_pos(pos) + _current_bank_memory_slice.data();
+            flash_delete_and_write(NO_DELETE, write_pos, flash_record_key, get_record_length(pos), value_ptr, _other_bank_memory_slice);
             write_pos += get_record_position_increment(pos);
         }
         pos += get_record_position_increment(pos);
@@ -801,4 +800,3 @@ void FlashKlv::flash_write_page(size_t page_index, std::span<uint8_t>& flash_mem
 
 #endif // FRAMEWORK
 }
-// NOLINTEND(cppcoreguidelines-avoid-c-arrays, hicpp-avoid-c-arrays,modernize-avoid-c-arrays)
